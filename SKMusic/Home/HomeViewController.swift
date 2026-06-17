@@ -1,0 +1,500 @@
+//
+//  HomeViewController.swift
+//  SKMusic
+//
+//  Created by Codex on 2026/6/17.
+//
+
+import UIKit
+
+final class HomeViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UIScrollViewDelegate {
+    private enum MediaKind {
+        case video
+        case audio
+    }
+
+    private enum FriendState {
+        case add
+        case good
+    }
+
+    private struct HomeMediaItem {
+        let kind: MediaKind
+        let mediaImageName: String
+        let friendState: FriendState
+    }
+
+    private let mediaItems = [
+        HomeMediaItem(kind: .video, mediaImageName: "video_cover", friendState: .add),
+        HomeMediaItem(kind: .audio, mediaImageName: "record_disc", friendState: .add),
+        HomeMediaItem(kind: .audio, mediaImageName: "record_disc", friendState: .good)
+    ]
+
+    private let mediaLayout = UICollectionViewFlowLayout()
+    private lazy var mediaCollectionView = UICollectionView(frame: .zero, collectionViewLayout: mediaLayout)
+    private let addFriendButton = UIButton(type: .custom)
+    private let goodFriendButton = UIButton(type: .custom)
+
+    private var currentIndex = 0
+    private var videoMediaHeightConstraint: NSLayoutConstraint!
+    private var audioMediaHeightConstraint: NSLayoutConstraint!
+    private var reportVideoTopConstraint: NSLayoutConstraint!
+    private var reportAudioTopConstraint: NSLayoutConstraint!
+    private var lastMediaCollectionSize = CGSize.zero
+
+    override var prefersStatusBarHidden: Bool {
+        true
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupViews()
+        updateCurrentItem(animated: false)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        refreshMediaLayoutIfNeeded()
+    }
+
+    private func setupViews() {
+        view.backgroundColor = .white
+
+        let backgroundImageView = UIImageView(image: UIImage(named: "home_background"))
+        backgroundImageView.contentMode = .scaleToFill
+        view.addSubview(backgroundImageView)
+
+        let headerTitleImageView = UIImageView(image: UIImage(named: "audio_player_title"))
+        headerTitleImageView.contentMode = .scaleAspectFit
+        view.addSubview(headerTitleImageView)
+
+        let reportButton = UIButton(type: .custom)
+        configureImageButton(reportButton, imageName: "report_icon", accessibilityLabel: "Report")
+        reportButton.addTarget(self, action: #selector(reportTapped), for: .touchUpInside)
+        view.addSubview(reportButton)
+
+        mediaLayout.scrollDirection = .horizontal
+        mediaLayout.minimumLineSpacing = 0
+        mediaLayout.minimumInteritemSpacing = 0
+        mediaCollectionView.backgroundColor = .clear
+        mediaCollectionView.clipsToBounds = true
+        mediaCollectionView.isPagingEnabled = true
+        mediaCollectionView.showsHorizontalScrollIndicator = false
+        mediaCollectionView.dataSource = self
+        mediaCollectionView.delegate = self
+        mediaCollectionView.register(HomeMediaCollectionViewCell.self, forCellWithReuseIdentifier: HomeMediaCollectionViewCell.reuseIdentifier)
+        view.addSubview(mediaCollectionView)
+
+        let songTitleImageView = UIImageView(image: UIImage(named: "song_title_head_clouds"))
+        let artistImageView = UIImageView(image: UIImage(named: "artist_annie"))
+        [songTitleImageView, artistImageView].forEach { imageView in
+            imageView.contentMode = .scaleAspectFit
+            view.addSubview(imageView)
+        }
+
+        configureImageButton(addFriendButton, imageName: "add_friend_button", accessibilityLabel: "Add Friend")
+        view.addSubview(addFriendButton)
+
+        goodFriendButton.backgroundColor = UIColor(red: 0.20, green: 0.20, blue: 0.20, alpha: 1)
+        goodFriendButton.layer.cornerRadius = 10
+        goodFriendButton.setTitle("Good Friend", for: .normal)
+        goodFriendButton.setTitleColor(.white, for: .normal)
+        goodFriendButton.titleLabel?.font = Self.goodFriendFont
+        view.addSubview(goodFriendButton)
+
+        let likeButton = UIButton(type: .custom)
+        configureImageButton(likeButton, imageName: "like_icon", accessibilityLabel: "Like")
+        view.addSubview(likeButton)
+
+        let likeCountLabel = UILabel()
+        configureCountLabel(likeCountLabel)
+        likeCountLabel.text = "99+"
+        view.addSubview(likeCountLabel)
+
+        let progressSlider = UISlider()
+        configureProgressSlider(progressSlider)
+        view.addSubview(progressSlider)
+
+        let elapsedTimeLabel = UILabel()
+        let totalTimeLabel = UILabel()
+        configureTimeLabel(elapsedTimeLabel, text: "00:18", alignment: .left)
+        configureTimeLabel(totalTimeLabel, text: "03:18", alignment: .right)
+        view.addSubview(elapsedTimeLabel)
+        view.addSubview(totalTimeLabel)
+
+        let repeatButton = UIButton(type: .custom)
+        let previousButton = UIButton(type: .custom)
+        let playPauseButton = UIButton(type: .custom)
+        let nextButton = UIButton(type: .custom)
+        let commentButton = UIButton(type: .custom)
+        configureImageButton(repeatButton, imageName: "repeat_one_button", accessibilityLabel: "Repeat")
+        configureImageButton(previousButton, imageName: "previous_button", accessibilityLabel: "Previous")
+        configureImageButton(playPauseButton, imageName: "play_pause_button", accessibilityLabel: "Play")
+        configureImageButton(nextButton, imageName: "next_button", accessibilityLabel: "Next")
+        configureImageButton(commentButton, imageName: "comment_icon", accessibilityLabel: "Comment")
+        previousButton.addTarget(self, action: #selector(previousTapped), for: .touchUpInside)
+        nextButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
+
+        let controlsStackView = UIStackView()
+        controlsStackView.axis = .horizontal
+        controlsStackView.alignment = .center
+        controlsStackView.distribution = .equalSpacing
+        controlsStackView.setCustomSpacing(28, after: nextButton)
+        [repeatButton, previousButton, playPauseButton, nextButton, commentButton].forEach { controlsStackView.addArrangedSubview($0) }
+        view.addSubview(controlsStackView)
+
+        let commentCountLabel = UILabel()
+        configureCountLabel(commentCountLabel)
+        commentCountLabel.text = "99+"
+        view.addSubview(commentCountLabel)
+
+        [
+            backgroundImageView,
+            headerTitleImageView,
+            reportButton,
+            mediaCollectionView,
+            songTitleImageView,
+            artistImageView,
+            addFriendButton,
+            goodFriendButton,
+            likeButton,
+            likeCountLabel,
+            progressSlider,
+            elapsedTimeLabel,
+            totalTimeLabel,
+            controlsStackView,
+            repeatButton,
+            previousButton,
+            playPauseButton,
+            nextButton,
+            commentButton,
+            commentCountLabel
+        ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+
+        videoMediaHeightConstraint = mediaCollectionView.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.49)
+        audioMediaHeightConstraint = mediaCollectionView.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.36)
+        videoMediaHeightConstraint.priority = .defaultHigh
+        audioMediaHeightConstraint.priority = .defaultHigh
+        reportVideoTopConstraint = reportButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 64)
+        reportAudioTopConstraint = reportButton.topAnchor.constraint(equalTo: mediaCollectionView.bottomAnchor, constant: -39)
+        let minimumMediaHeightConstraint = mediaCollectionView.heightAnchor.constraint(greaterThanOrEqualToConstant: 200)
+        minimumMediaHeightConstraint.priority = .defaultHigh
+
+        [repeatButton, previousButton, playPauseButton, nextButton, commentButton].forEach { button in
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: 54),
+                button.heightAnchor.constraint(equalToConstant: 54)
+            ])
+        }
+
+        NSLayoutConstraint.activate([
+            backgroundImageView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            headerTitleImageView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            headerTitleImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 31),
+            headerTitleImageView.widthAnchor.constraint(equalToConstant: 138),
+            headerTitleImageView.heightAnchor.constraint(equalToConstant: 36),
+
+            reportButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -25),
+            reportButton.widthAnchor.constraint(equalToConstant: 34),
+            reportButton.heightAnchor.constraint(equalTo: reportButton.widthAnchor),
+
+            mediaCollectionView.topAnchor.constraint(equalTo: headerTitleImageView.bottomAnchor, constant: 18),
+            mediaCollectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            mediaCollectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            mediaCollectionView.heightAnchor.constraint(lessThanOrEqualToConstant: 430),
+            minimumMediaHeightConstraint,
+
+            songTitleImageView.leadingAnchor.constraint(equalTo: mediaCollectionView.leadingAnchor),
+            songTitleImageView.widthAnchor.constraint(lessThanOrEqualTo: mediaCollectionView.widthAnchor, multiplier: 0.76),
+            songTitleImageView.heightAnchor.constraint(equalToConstant: 40),
+            mediaCollectionView.bottomAnchor.constraint(lessThanOrEqualTo: songTitleImageView.topAnchor, constant: -14),
+
+            artistImageView.topAnchor.constraint(equalTo: songTitleImageView.bottomAnchor, constant: 2),
+            artistImageView.leadingAnchor.constraint(equalTo: songTitleImageView.leadingAnchor),
+            artistImageView.widthAnchor.constraint(equalToConstant: 70),
+            artistImageView.heightAnchor.constraint(equalToConstant: 31),
+
+            addFriendButton.centerYAnchor.constraint(equalTo: artistImageView.centerYAnchor),
+            addFriendButton.leadingAnchor.constraint(equalTo: artistImageView.trailingAnchor, constant: 16),
+            addFriendButton.widthAnchor.constraint(equalToConstant: 97),
+            addFriendButton.heightAnchor.constraint(equalToConstant: 20),
+
+            goodFriendButton.centerYAnchor.constraint(equalTo: addFriendButton.centerYAnchor),
+            goodFriendButton.leadingAnchor.constraint(equalTo: addFriendButton.leadingAnchor),
+            goodFriendButton.widthAnchor.constraint(equalToConstant: 99),
+            goodFriendButton.heightAnchor.constraint(equalToConstant: 20),
+
+            likeButton.centerYAnchor.constraint(equalTo: artistImageView.centerYAnchor),
+            likeButton.trailingAnchor.constraint(equalTo: mediaCollectionView.trailingAnchor, constant: -24),
+            likeButton.widthAnchor.constraint(equalToConstant: 45),
+            likeButton.heightAnchor.constraint(equalTo: likeButton.widthAnchor),
+
+            likeCountLabel.leadingAnchor.constraint(equalTo: likeButton.trailingAnchor, constant: 4),
+            likeCountLabel.centerYAnchor.constraint(equalTo: likeButton.centerYAnchor, constant: 8),
+            likeCountLabel.widthAnchor.constraint(equalToConstant: 36),
+            likeCountLabel.heightAnchor.constraint(equalToConstant: 18),
+
+            progressSlider.topAnchor.constraint(equalTo: artistImageView.bottomAnchor, constant: 27),
+            progressSlider.leadingAnchor.constraint(equalTo: mediaCollectionView.leadingAnchor, constant: 8),
+            progressSlider.trailingAnchor.constraint(equalTo: mediaCollectionView.trailingAnchor, constant: -8),
+            progressSlider.heightAnchor.constraint(equalToConstant: 22),
+
+            elapsedTimeLabel.topAnchor.constraint(equalTo: progressSlider.bottomAnchor, constant: -2),
+            elapsedTimeLabel.leadingAnchor.constraint(equalTo: progressSlider.leadingAnchor),
+            elapsedTimeLabel.widthAnchor.constraint(equalToConstant: 52),
+            elapsedTimeLabel.heightAnchor.constraint(equalToConstant: 18),
+
+            totalTimeLabel.topAnchor.constraint(equalTo: elapsedTimeLabel.topAnchor),
+            totalTimeLabel.trailingAnchor.constraint(equalTo: progressSlider.trailingAnchor),
+            totalTimeLabel.widthAnchor.constraint(equalToConstant: 52),
+            totalTimeLabel.heightAnchor.constraint(equalTo: elapsedTimeLabel.heightAnchor),
+
+            controlsStackView.topAnchor.constraint(equalTo: elapsedTimeLabel.bottomAnchor, constant: 12),
+            controlsStackView.leadingAnchor.constraint(equalTo: mediaCollectionView.leadingAnchor, constant: -3),
+            controlsStackView.trailingAnchor.constraint(equalTo: mediaCollectionView.trailingAnchor, constant: -18),
+            controlsStackView.heightAnchor.constraint(equalToConstant: 58),
+            controlsStackView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -144),
+
+            commentCountLabel.leadingAnchor.constraint(equalTo: commentButton.trailingAnchor, constant: -5),
+            commentCountLabel.trailingAnchor.constraint(lessThanOrEqualTo: mediaCollectionView.trailingAnchor),
+            commentCountLabel.centerYAnchor.constraint(equalTo: commentButton.centerYAnchor, constant: 11),
+            commentCountLabel.widthAnchor.constraint(equalToConstant: 39),
+            commentCountLabel.heightAnchor.constraint(equalToConstant: 18)
+        ])
+
+        videoMediaHeightConstraint.isActive = true
+        reportVideoTopConstraint.isActive = true
+    }
+
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        mediaItems.count
+    }
+
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        guard
+            let cell = collectionView.dequeueReusableCell(
+                withReuseIdentifier: HomeMediaCollectionViewCell.reuseIdentifier,
+                for: indexPath
+            ) as? HomeMediaCollectionViewCell
+        else {
+            return UICollectionViewCell()
+        }
+
+        let item = mediaItems[indexPath.item]
+        cell.configure(imageName: item.mediaImageName, isAudio: item.kind == .audio)
+        return cell
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        updateIndexFromScrollPosition()
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        updateIndexFromScrollPosition()
+    }
+
+    private func updateIndexFromScrollPosition() {
+        let width = max(mediaCollectionView.bounds.width, 1)
+        let index = Int((mediaCollectionView.contentOffset.x / width).rounded())
+        setCurrentIndex(index, scroll: false, animated: true)
+    }
+
+    private func setCurrentIndex(_ index: Int, scroll: Bool, animated: Bool) {
+        guard mediaItems.indices.contains(index) else { return }
+        currentIndex = index
+        updateCurrentItem(animated: animated) { [self] in
+            guard scroll else { return }
+            scrollToCurrentMedia(animated: animated)
+        }
+    }
+
+    private func updateCurrentItem(animated: Bool, completion: (() -> Void)? = nil) {
+        let item = mediaItems[currentIndex]
+        let isAudio = item.kind == .audio
+
+        videoMediaHeightConstraint.isActive = !isAudio
+        audioMediaHeightConstraint.isActive = isAudio
+        reportVideoTopConstraint.isActive = !isAudio
+        reportAudioTopConstraint.isActive = isAudio
+        addFriendButton.isHidden = item.friendState == .good
+        goodFriendButton.isHidden = item.friendState == .add
+
+        let updates = {
+            self.view.layoutIfNeeded()
+        }
+
+        guard animated else {
+            updates()
+            refreshMediaLayoutIfNeeded()
+            completion?()
+            return
+        }
+
+        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut], animations: updates) { [self] _ in
+            refreshMediaLayoutIfNeeded()
+            completion?()
+        }
+    }
+
+    private func refreshMediaLayoutIfNeeded() {
+        let size = mediaCollectionView.bounds.size
+        guard size.width > 0, size.height > 0, size != lastMediaCollectionSize else { return }
+        lastMediaCollectionSize = size
+        mediaLayout.itemSize = size
+        mediaLayout.invalidateLayout()
+    }
+
+    private func scrollToCurrentMedia(animated: Bool) {
+        guard mediaCollectionView.numberOfItems(inSection: 0) > currentIndex else { return }
+        mediaCollectionView.scrollToItem(
+            at: IndexPath(item: currentIndex, section: 0),
+            at: .centeredHorizontally,
+            animated: animated
+        )
+    }
+
+    @objc private func previousTapped() {
+        let nextIndex = (currentIndex - 1 + mediaItems.count) % mediaItems.count
+        setCurrentIndex(nextIndex, scroll: true, animated: true)
+    }
+
+    @objc private func nextTapped() {
+        let nextIndex = (currentIndex + 1) % mediaItems.count
+        setCurrentIndex(nextIndex, scroll: true, animated: true)
+    }
+
+    @objc private func reportTapped() {
+        let hostView = parent?.view ?? view
+        guard hostView.viewWithTag(51001) == nil else { return }
+
+        let overlayView = UIView()
+        overlayView.tag = 51001
+        overlayView.backgroundColor = UIColor.black.withAlphaComponent(0.46)
+        hostView.addSubview(overlayView)
+
+        let cardImageView = UIImageView(image: UIImage(named: "report_popup_background"))
+        cardImageView.contentMode = .scaleToFill
+        overlayView.addSubview(cardImageView)
+
+        let dividerView = UIView()
+        dividerView.backgroundColor = UIColor(red: 0.77, green: 0.62, blue: 0.76, alpha: 0.62)
+        overlayView.addSubview(dividerView)
+
+        let userIconImageView = UIImageView(image: UIImage(named: "report_popup_user_icon"))
+        let alertIconImageView = UIImageView(image: UIImage(named: "report_popup_alert_icon"))
+        let reportTextImageView = UIImageView(image: UIImage(named: "report_popup_report_text"))
+        let blockTextImageView = UIImageView(image: UIImage(named: "report_popup_block_text"))
+        [userIconImageView, alertIconImageView, reportTextImageView, blockTextImageView].forEach { imageView in
+            imageView.contentMode = .scaleAspectFit
+            overlayView.addSubview(imageView)
+        }
+
+        let closeButton = UIButton(type: .custom)
+        configureImageButton(closeButton, imageName: "report_popup_back_button", accessibilityLabel: "Close")
+        closeButton.addTarget(self, action: #selector(dismissReportPopup), for: .touchUpInside)
+        overlayView.addSubview(closeButton)
+
+        [
+            overlayView,
+            cardImageView,
+            dividerView,
+            userIconImageView,
+            alertIconImageView,
+            reportTextImageView,
+            blockTextImageView,
+            closeButton
+        ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+
+        NSLayoutConstraint.activate([
+            overlayView.topAnchor.constraint(equalTo: hostView.topAnchor),
+            overlayView.leadingAnchor.constraint(equalTo: hostView.leadingAnchor),
+            overlayView.trailingAnchor.constraint(equalTo: hostView.trailingAnchor),
+            overlayView.bottomAnchor.constraint(equalTo: hostView.bottomAnchor),
+
+            cardImageView.centerXAnchor.constraint(equalTo: overlayView.centerXAnchor),
+            cardImageView.centerYAnchor.constraint(equalTo: overlayView.centerYAnchor, constant: -12),
+            cardImageView.widthAnchor.constraint(equalToConstant: 278),
+            cardImageView.heightAnchor.constraint(equalToConstant: 212),
+
+            dividerView.centerXAnchor.constraint(equalTo: cardImageView.centerXAnchor),
+            dividerView.centerYAnchor.constraint(equalTo: cardImageView.centerYAnchor, constant: -4),
+            dividerView.widthAnchor.constraint(equalToConstant: 1),
+            dividerView.heightAnchor.constraint(equalToConstant: 96),
+
+            userIconImageView.centerXAnchor.constraint(equalTo: cardImageView.leadingAnchor, constant: 84),
+            userIconImageView.topAnchor.constraint(equalTo: cardImageView.topAnchor, constant: 62),
+            userIconImageView.widthAnchor.constraint(equalToConstant: 63),
+            userIconImageView.heightAnchor.constraint(equalTo: userIconImageView.widthAnchor),
+
+            alertIconImageView.centerXAnchor.constraint(equalTo: cardImageView.trailingAnchor, constant: -84),
+            alertIconImageView.topAnchor.constraint(equalTo: userIconImageView.topAnchor),
+            alertIconImageView.widthAnchor.constraint(equalTo: userIconImageView.widthAnchor),
+            alertIconImageView.heightAnchor.constraint(equalTo: userIconImageView.heightAnchor),
+
+            reportTextImageView.centerXAnchor.constraint(equalTo: userIconImageView.centerXAnchor),
+            reportTextImageView.topAnchor.constraint(equalTo: userIconImageView.bottomAnchor, constant: 11),
+            reportTextImageView.widthAnchor.constraint(equalToConstant: 68),
+            reportTextImageView.heightAnchor.constraint(equalToConstant: 24),
+
+            blockTextImageView.centerXAnchor.constraint(equalTo: alertIconImageView.centerXAnchor),
+            blockTextImageView.topAnchor.constraint(equalTo: reportTextImageView.topAnchor),
+            blockTextImageView.widthAnchor.constraint(equalToConstant: 58),
+            blockTextImageView.heightAnchor.constraint(equalTo: reportTextImageView.heightAnchor),
+
+            closeButton.centerXAnchor.constraint(equalTo: cardImageView.centerXAnchor),
+            closeButton.centerYAnchor.constraint(equalTo: cardImageView.bottomAnchor),
+            closeButton.widthAnchor.constraint(equalToConstant: 61),
+            closeButton.heightAnchor.constraint(equalTo: closeButton.widthAnchor)
+        ])
+    }
+
+    @objc private func dismissReportPopup() {
+        (parent?.view ?? view).viewWithTag(51001)?.removeFromSuperview()
+    }
+
+    private func configureImageButton(_ button: UIButton, imageName: String, accessibilityLabel: String) {
+        button.setImage(UIImage(named: imageName), for: .normal)
+        button.imageView?.contentMode = .scaleAspectFit
+        button.adjustsImageWhenHighlighted = false
+        button.accessibilityLabel = accessibilityLabel
+    }
+
+    private func configureProgressSlider(_ slider: UISlider) {
+        slider.minimumValue = 0
+        slider.maximumValue = 198
+        slider.value = 18
+        slider.minimumTrackTintColor = UIColor(red: 0.18, green: 0.18, blue: 0.18, alpha: 1)
+        slider.maximumTrackTintColor = UIColor(red: 0.62, green: 0.62, blue: 0.62, alpha: 1)
+        slider.thumbTintColor = UIColor(red: 0.22, green: 0.22, blue: 0.22, alpha: 1)
+    }
+
+    private func configureTimeLabel(_ label: UILabel, text: String, alignment: NSTextAlignment) {
+        label.text = text
+        label.textAlignment = alignment
+        label.textColor = UIColor(red: 0.36, green: 0.36, blue: 0.38, alpha: 1)
+        label.font = Self.timeFont
+    }
+
+    private func configureCountLabel(_ label: UILabel) {
+        label.textColor = UIColor(red: 0.19, green: 0.19, blue: 0.20, alpha: 1)
+        label.font = Self.countFont
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.8
+    }
+
+    private static var goodFriendFont: UIFont {
+        UIFont(name: "AvenirNext-HeavyItalic", size: 12) ?? .italicSystemFont(ofSize: 12)
+    }
+
+    private static var timeFont: UIFont {
+        UIFont(name: "AvenirNext-MediumItalic", size: 11) ?? .italicSystemFont(ofSize: 11)
+    }
+
+    private static var countFont: UIFont {
+        UIFont(name: "AvenirNext-Bold", size: 14) ?? .boldSystemFont(ofSize: 14)
+    }
+}
