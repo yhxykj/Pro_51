@@ -34,6 +34,18 @@ final class MainTabBarController: UIViewController {
         selectTab(at: 0)
     }
 
+    func showTab(at index: Int) {
+        selectTab(at: index)
+    }
+
+    func showMessageTab() {
+        showTab(at: 2)
+    }
+
+    func showProfileTab() {
+        showTab(at: 3)
+    }
+
     private func setupTabs() {
         tabs = [
             TabItem(viewController: HomeViewController(), iconName: "tab_home", selectedIconName: "tab_home_highlight", accessibilityLabel: "Home"),
@@ -134,7 +146,51 @@ final class MainTabBarController: UIViewController {
     }
 
     @objc private func tabButtonTapped(_ sender: UIButton) {
+        if sender.tag == 1 {
+            let navigationController = navigationController ?? parent?.navigationController
+            if !(navigationController?.topViewController is RecommendationViewController) {
+                navigationController?.pushViewController(RecommendationViewController(), animated: true)
+            }
+            return
+        }
+
         selectTab(at: sender.tag)
+    }
+}
+
+extension UIViewController {
+    func switchToMainMessageTab() {
+        switchToMainTab(at: 2)
+    }
+
+    func switchToMainProfileTab() {
+        switchToMainTab(at: 3)
+    }
+
+    private func switchToMainTab(at index: Int) {
+        if let mainTabBarController = self as? MainTabBarController {
+            mainTabBarController.showTab(at: index)
+            return
+        }
+
+        var parentViewController = parent
+        while let currentParent = parentViewController {
+            if let mainTabBarController = currentParent as? MainTabBarController {
+                mainTabBarController.showTab(at: index)
+                return
+            }
+            parentViewController = currentParent.parent
+        }
+
+        guard
+            let navigationController,
+            let mainTabBarController = navigationController.viewControllers.first(where: { $0 is MainTabBarController }) as? MainTabBarController
+        else {
+            return
+        }
+
+        mainTabBarController.showTab(at: index)
+        navigationController.popToViewController(mainTabBarController, animated: true)
     }
 }
 

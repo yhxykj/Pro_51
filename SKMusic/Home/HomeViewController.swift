@@ -32,13 +32,12 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
 
     private let mediaLayout = UICollectionViewFlowLayout()
     private lazy var mediaCollectionView = UICollectionView(frame: .zero, collectionViewLayout: mediaLayout)
-    private let addFriendButton = UIButton(type: .custom)
-    private let goodFriendButton = UIButton(type: .custom)
+    private let friendStateButton = UIButton(type: .custom)
 
     private var currentIndex = 0
     private var videoMediaHeightConstraint: NSLayoutConstraint!
     private var audioMediaHeightConstraint: NSLayoutConstraint!
-    private var reportVideoTopConstraint: NSLayoutConstraint!
+    private var reportVideoCenterYConstraint: NSLayoutConstraint!
     private var reportAudioTopConstraint: NSLayoutConstraint!
     private var lastMediaCollectionSize = CGSize.zero
 
@@ -92,15 +91,8 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
             view.addSubview(imageView)
         }
 
-        configureImageButton(addFriendButton, imageName: "add_friend_button", accessibilityLabel: "Add Friend")
-        view.addSubview(addFriendButton)
-
-        goodFriendButton.backgroundColor = UIColor(red: 0.20, green: 0.20, blue: 0.20, alpha: 1)
-        goodFriendButton.layer.cornerRadius = 10
-        goodFriendButton.setTitle("Good Friend", for: .normal)
-        goodFriendButton.setTitleColor(.white, for: .normal)
-        goodFriendButton.titleLabel?.font = Self.goodFriendFont
-        view.addSubview(goodFriendButton)
+        configureFriendStateButton()
+        view.addSubview(friendStateButton)
 
         let likeButton = UIButton(type: .custom)
         configureImageButton(likeButton, imageName: "like_icon", accessibilityLabel: "Like")
@@ -134,6 +126,7 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         configureImageButton(commentButton, imageName: "comment_icon", accessibilityLabel: "Comment")
         previousButton.addTarget(self, action: #selector(previousTapped), for: .touchUpInside)
         nextButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
+        commentButton.addTarget(self, action: #selector(messageTapped), for: .touchUpInside)
 
         let controlsStackView = UIStackView()
         controlsStackView.axis = .horizontal
@@ -147,6 +140,7 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         configureCountLabel(commentCountLabel)
         commentCountLabel.text = "99+"
         view.addSubview(commentCountLabel)
+        view.bringSubviewToFront(reportButton)
 
         [
             backgroundImageView,
@@ -155,8 +149,7 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
             mediaCollectionView,
             songTitleImageView,
             artistImageView,
-            addFriendButton,
-            goodFriendButton,
+            friendStateButton,
             likeButton,
             likeCountLabel,
             progressSlider,
@@ -175,7 +168,7 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         audioMediaHeightConstraint = mediaCollectionView.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.36)
         videoMediaHeightConstraint.priority = .defaultHigh
         audioMediaHeightConstraint.priority = .defaultHigh
-        reportVideoTopConstraint = reportButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 64)
+        reportVideoCenterYConstraint = reportButton.centerYAnchor.constraint(equalTo: headerTitleImageView.centerYAnchor)
         reportAudioTopConstraint = reportButton.topAnchor.constraint(equalTo: mediaCollectionView.bottomAnchor, constant: -39)
         let minimumMediaHeightConstraint = mediaCollectionView.heightAnchor.constraint(greaterThanOrEqualToConstant: 200)
         minimumMediaHeightConstraint.priority = .defaultHigh
@@ -218,15 +211,10 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
             artistImageView.widthAnchor.constraint(equalToConstant: 70),
             artistImageView.heightAnchor.constraint(equalToConstant: 31),
 
-            addFriendButton.centerYAnchor.constraint(equalTo: artistImageView.centerYAnchor),
-            addFriendButton.leadingAnchor.constraint(equalTo: artistImageView.trailingAnchor, constant: 16),
-            addFriendButton.widthAnchor.constraint(equalToConstant: 97),
-            addFriendButton.heightAnchor.constraint(equalToConstant: 20),
-
-            goodFriendButton.centerYAnchor.constraint(equalTo: addFriendButton.centerYAnchor),
-            goodFriendButton.leadingAnchor.constraint(equalTo: addFriendButton.leadingAnchor),
-            goodFriendButton.widthAnchor.constraint(equalToConstant: 99),
-            goodFriendButton.heightAnchor.constraint(equalToConstant: 20),
+            friendStateButton.centerYAnchor.constraint(equalTo: artistImageView.centerYAnchor),
+            friendStateButton.leadingAnchor.constraint(equalTo: artistImageView.trailingAnchor, constant: 16),
+            friendStateButton.widthAnchor.constraint(equalToConstant: 112),
+            friendStateButton.heightAnchor.constraint(equalToConstant: 22),
 
             likeButton.centerYAnchor.constraint(equalTo: artistImageView.centerYAnchor),
             likeButton.trailingAnchor.constraint(equalTo: mediaCollectionView.trailingAnchor, constant: -24),
@@ -267,7 +255,7 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         ])
 
         videoMediaHeightConstraint.isActive = true
-        reportVideoTopConstraint.isActive = true
+        reportVideoCenterYConstraint.isActive = true
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
@@ -287,6 +275,20 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         let item = mediaItems[indexPath.item]
         cell.configure(imageName: item.mediaImageName, isAudio: item.kind == .audio)
         return cell
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        let item = mediaItems[indexPath.item]
+        let playerViewController: UIViewController
+
+        switch item.kind {
+        case .video:
+            playerViewController = VideoPlayerViewController(coverImageName: item.mediaImageName)
+        case .audio:
+            playerViewController = AudioPlayerViewController(isGoodFriend: item.friendState == .good)
+        }
+
+        (navigationController ?? parent?.navigationController)?.pushViewController(playerViewController, animated: true)
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
@@ -318,10 +320,9 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
 
         videoMediaHeightConstraint.isActive = !isAudio
         audioMediaHeightConstraint.isActive = isAudio
-        reportVideoTopConstraint.isActive = !isAudio
+        reportVideoCenterYConstraint.isActive = !isAudio
         reportAudioTopConstraint.isActive = isAudio
-        addFriendButton.isHidden = item.friendState == .good
-        goodFriendButton.isHidden = item.friendState == .add
+        updateFriendStateButton(item.friendState)
 
         let updates = {
             self.view.layoutIfNeeded()
@@ -367,8 +368,12 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         setCurrentIndex(nextIndex, scroll: true, animated: true)
     }
 
+    @objc private func messageTapped() {
+        switchToMainMessageTab()
+    }
+
     @objc private func reportTapped() {
-        let hostView = parent?.view ?? view
+        guard let hostView = parent?.view ?? view else { return }
         guard hostView.viewWithTag(51001) == nil else { return }
 
         let overlayView = UIView()
@@ -453,7 +458,25 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
     }
 
     @objc private func dismissReportPopup() {
-        (parent?.view ?? view).viewWithTag(51001)?.removeFromSuperview()
+        (parent?.view ?? view)?.viewWithTag(51001)?.removeFromSuperview()
+    }
+
+    private func configureFriendStateButton() {
+        friendStateButton.backgroundColor = UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
+        friendStateButton.layer.cornerRadius = 11
+        friendStateButton.setTitleColor(UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1), for: .normal)
+        friendStateButton.titleLabel?.font = Self.friendButtonFont
+        friendStateButton.titleLabel?.adjustsFontSizeToFitWidth = true
+        friendStateButton.titleLabel?.minimumScaleFactor = 0.78
+        friendStateButton.accessibilityLabel = "Friend State"
+    }
+
+    private func updateFriendStateButton(_ state: FriendState) {
+        let title = state == .add ? "+ Add Friend" : "Good Friend"
+        friendStateButton.setTitle(title, for: .normal)
+        friendStateButton.backgroundColor = state == .add
+            ? UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
+            : UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
     }
 
     private func configureImageButton(_ button: UIButton, imageName: String, accessibilityLabel: String) {
@@ -486,8 +509,8 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         label.minimumScaleFactor = 0.8
     }
 
-    private static var goodFriendFont: UIFont {
-        UIFont(name: "AvenirNext-HeavyItalic", size: 12) ?? .italicSystemFont(ofSize: 12)
+    private static var friendButtonFont: UIFont {
+        UIFont(name: "AvenirNext-HeavyItalic", size: 13) ?? .italicSystemFont(ofSize: 13)
     }
 
     private static var timeFont: UIFont {

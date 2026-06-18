@@ -18,6 +18,10 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         let subtitle: String
     }
 
+    private struct FriendItem {
+        let name: String
+    }
+
     private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
     private let messageHeaderButton = UIButton(type: .custom)
     private let friendHeaderButton = UIButton(type: .custom)
@@ -27,6 +31,10 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         MessageItem(title: "Massages", subtitle: "This is my first time sharin ........"),
         MessageItem(title: "Massages", subtitle: "This is my first time sharin ........"),
         MessageItem(title: "Massages", subtitle: "This is my first time sharin ........")
+    ]
+    private let friendItems = [
+        FriendItem(name: "Angela"),
+        FriendItem(name: "Angela")
     ]
 
     private var selectedHeader: HeaderSelection = .message
@@ -83,6 +91,7 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         tableView.dataSource = self
         tableView.delegate = self
         tableView.register(MessageTableViewCell.self, forCellReuseIdentifier: MessageTableViewCell.reuseIdentifier)
+        tableView.register(FriendTableViewCell.self, forCellReuseIdentifier: FriendTableViewCell.reuseIdentifier)
         view.addSubview(tableView)
     }
 
@@ -126,14 +135,25 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        messageItems.count
+        selectedHeader == .message ? messageItems.count : friendItems.count
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        86
+        selectedHeader == .message ? 86 : 54
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if selectedHeader == .friend {
+            guard
+                let cell = tableView.dequeueReusableCell(withIdentifier: FriendTableViewCell.reuseIdentifier, for: indexPath) as? FriendTableViewCell
+            else {
+                return UITableViewCell()
+            }
+
+            cell.configure(name: friendItems[indexPath.row].name)
+            return cell
+        }
+
         guard
             let cell = tableView.dequeueReusableCell(withIdentifier: MessageTableViewCell.reuseIdentifier, for: indexPath) as? MessageTableViewCell
         else {
@@ -168,7 +188,11 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         }
 
         let navigationController = navigationController ?? parent?.navigationController
-        navigationController?.pushViewController(FriendChatViewController(), animated: true)
+        if selectedHeader == .friend {
+            navigationController?.pushViewController(UserProfileViewController(), animated: true)
+        } else {
+            navigationController?.pushViewController(FriendChatViewController(), animated: true)
+        }
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
