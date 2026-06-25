@@ -8,7 +8,7 @@
 import UIKit
 
 final class FriendChatViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UITextFieldDelegate {
-    private struct ChatMessage {
+    private struct ChatMessage: Codable {
         let text: String
         let isIncoming: Bool
     }
@@ -18,6 +18,8 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
         static let placeholderColor = UIColor(red: 0.44, green: 0.35, blue: 0.43, alpha: 0.75)
     }
 
+    private static let storageKeyPrefix = "friend_chat_messages"
+
     private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
     private let backButton = UIButton(type: .custom)
     private let titleLabel = UILabel()
@@ -25,14 +27,31 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
     private let inputContainerView = UIView()
     private let messageTextField = UITextField()
     private let sendButton = UIButton(type: .custom)
-    private var chatMessages = [
-        ChatMessage(text: "Hi~ I am Sarah,welcome to myworld", isIncoming: true),
-        ChatMessage(text: "Hi~ I am Sarah,welcome to myworld", isIncoming: false)
-    ]
+    private let peerName: String
+    private let messagesStorageKey: String
+    private var chatMessages: [ChatMessage]
     private var inputBottomConstraint: NSLayoutConstraint!
 
     override var prefersStatusBarHidden: Bool {
         true
+    }
+
+    init(peerName: String = "Angela") {
+        let name = Self.normalizedPeerName(peerName)
+        let key = Self.messagesStorageKey(for: name)
+        self.peerName = name
+        self.messagesStorageKey = key
+        self.chatMessages = Self.loadMessages(forKey: key)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        let name = Self.normalizedPeerName("Angela")
+        let key = Self.messagesStorageKey(for: name)
+        self.peerName = name
+        self.messagesStorageKey = key
+        self.chatMessages = Self.loadMessages(forKey: key)
+        super.init(coder: coder)
     }
 
     override func viewDidLoad() {
@@ -55,7 +74,7 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         view.addSubview(backButton)
 
-        titleLabel.text = "Angela"
+        titleLabel.text = peerName
         titleLabel.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.20, alpha: 1)
         titleLabel.font = Self.titleFont
         titleLabel.textAlignment = .center
@@ -68,6 +87,8 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
         chatTableView.showsVerticalScrollIndicator = false
         chatTableView.contentInsetAdjustmentBehavior = .never
         chatTableView.keyboardDismissMode = .onDrag
+        chatTableView.rowHeight = UITableView.automaticDimension
+        chatTableView.estimatedRowHeight = 65
         chatTableView.dataSource = self
         chatTableView.delegate = self
         chatTableView.register(ChatMessageTableViewCell.self, forCellReuseIdentifier: ChatMessageTableViewCell.reuseIdentifier)
@@ -159,7 +180,7 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        65
+        UITableView.automaticDimension
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -187,6 +208,7 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
         }
 
         chatMessages.append(ChatMessage(text: trimmedText, isIncoming: false))
+        saveMessages()
         let indexPath = IndexPath(row: chatMessages.count - 1, section: 0)
         chatTableView.insertRows(at: [indexPath], with: .automatic)
         chatTableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
@@ -200,6 +222,42 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
 
     @objc private func backTapped() {
         navigationController?.popViewController(animated: true)
+    }
+
+    private func saveMessages() {
+        guard let data = try? JSONEncoder().encode(chatMessages) else { return }
+        UserDefaults.standard.set(data, forKey: messagesStorageKey)
+    }
+
+    private static func loadMessages(forKey key: String) -> [ChatMessage] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let messages = try? JSONDecoder().decode([ChatMessage].self, from: data) else {
+            return []
+        }
+        return messages
+    }
+
+    private static func messagesStorageKey(for peerName: String) -> String {
+        let account = AuthSession.currentEmail ?? "guest"
+        return [
+            storageKeyPrefix,
+            storageSafeComponent(account),
+            storageSafeComponent(peerName)
+        ].joined(separator: "_")
+    }
+
+    private static func normalizedPeerName(_ peerName: String) -> String {
+        let trimmedName = peerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? "Angela" : trimmedName
+    }
+
+    private static func storageSafeComponent(_ text: String) -> String {
+        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let normalized = text.lowercased().unicodeScalars.map { scalar -> Character in
+            allowedCharacters.contains(scalar) ? Character(scalar) : "_"
+        }
+        let value = String(normalized).trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return value.isEmpty ? "unknown" : value
     }
 
     private static var titleFont: UIFont {

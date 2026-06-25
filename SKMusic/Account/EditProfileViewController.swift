@@ -236,7 +236,7 @@ final class EditProfileViewController: UIViewController, UITextFieldDelegate, PH
 
     @objc private func continueTapped() {
         view.endEditing(true)
-        navigationController?.pushViewController(MainTabBarController(), animated: true)
+        navigationController?.setViewControllers([MainTabBarController()], animated: true)
     }
 
     @objc private func dismissKeyboard() {

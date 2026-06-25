@@ -64,7 +64,7 @@ final class FriendTableViewCell: UITableViewCell {
             nameLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 13),
             nameLabel.centerYAnchor.constraint(equalTo: avatarImageView.centerYAnchor),
             nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: chatImageView.leadingAnchor, constant: -18),
-            nameLabel.heightAnchor.constraint(equalToConstant: 24),
+            nameLabel.heightAnchor.constraint(equalToConstant: 26),
 
             chatImageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -23),
             chatImageView.centerYAnchor.constraint(equalTo: avatarImageView.centerYAnchor, constant: 1),
@@ -74,6 +74,6 @@ final class FriendTableViewCell: UITableViewCell {
     }
 
     private static var nameFont: UIFont {
-        UIFont(name: "AvenirNext-HeavyItalic", size: 16) ?? .italicSystemFont(ofSize: 16)
+        UIFont(name: "AvenirNext-HeavyItalic", size: 18) ?? .italicSystemFont(ofSize: 18)
     }
 }

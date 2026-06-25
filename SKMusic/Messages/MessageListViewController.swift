@@ -16,6 +16,7 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
     private struct MessageItem {
         let title: String
         let subtitle: String
+        let peerName: String
     }
 
     private struct FriendItem {
@@ -27,11 +28,7 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
     private let friendHeaderButton = UIButton(type: .custom)
     private let selectedIndicatorView = UIView()
     private let tableView = UITableView()
-    private let messageItems = [
-        MessageItem(title: "Massages", subtitle: "This is my first time sharin ........"),
-        MessageItem(title: "Massages", subtitle: "This is my first time sharin ........"),
-        MessageItem(title: "Massages", subtitle: "This is my first time sharin ........")
-    ]
+    private let messageItems: [MessageItem] = []
     private let friendItems = [
         FriendItem(name: "Angela"),
         FriendItem(name: "Angela")
@@ -191,7 +188,8 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         if selectedHeader == .friend {
             navigationController?.pushViewController(UserProfileViewController(), animated: true)
         } else {
-            navigationController?.pushViewController(FriendChatViewController(), animated: true)
+            let item = messageItems[indexPath.row]
+            navigationController?.pushViewController(FriendChatViewController(peerName: item.peerName), animated: true)
         }
     }
 

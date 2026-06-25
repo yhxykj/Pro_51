@@ -237,10 +237,29 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
 
     @objc private func continueTapped() {
         view.endEditing(true)
-        navigationController?.pushViewController(MainTabBarController(), animated: true)
+        let email = emailTextField.text ?? ""
+        let password = passwordTextField.text ?? ""
+
+        guard AuthSession.canSignIn(email: email, password: password) else {
+            showSignInFailedAlert()
+            return
+        }
+
+        AuthSession.start(email: email)
+        navigationController?.setViewControllers([MainTabBarController()], animated: true)
     }
 
     @objc private func dismissKeyboard() {
         view.endEditing(true)
+    }
+
+    private func showSignInFailedAlert() {
+        let alert = UIAlertController(
+            title: "Login failed",
+            message: "Please use the test account music666@gmail.com with password 123456.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }

@@ -22,10 +22,31 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         let kind: MediaKind
         let mediaImageName: String
         let friendState: FriendState
+        let videoResourceName: String?
+        let blockedUser: BlockedUser
+
+        init(
+            kind: MediaKind,
+            mediaImageName: String,
+            friendState: FriendState,
+            videoResourceName: String? = nil,
+            blockedUser: BlockedUser = BlockedUser(identifier: "Annie", displayName: "Annie", avatarImageName: "avatar_01")
+        ) {
+            self.kind = kind
+            self.mediaImageName = mediaImageName
+            self.friendState = friendState
+            self.videoResourceName = videoResourceName
+            self.blockedUser = blockedUser
+        }
     }
 
     private let mediaItems = [
-        HomeMediaItem(kind: .video, mediaImageName: "video_cover", friendState: .add),
+        HomeMediaItem(
+            kind: .video,
+            mediaImageName: "recommendation_live_crowd_cover",
+            friendState: .add,
+            videoResourceName: "recommendation_live_crowd_video"
+        ),
         HomeMediaItem(kind: .audio, mediaImageName: "record_disc", friendState: .add),
         HomeMediaItem(kind: .audio, mediaImageName: "record_disc", friendState: .good)
     ]
@@ -283,7 +304,10 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
 
         switch item.kind {
         case .video:
-            playerViewController = VideoPlayerViewController(coverImageName: item.mediaImageName)
+            playerViewController = VideoPlayerViewController(
+                videoURL: videoURL(for: item),
+                coverImageName: item.mediaImageName
+            )
         case .audio:
             playerViewController = AudioPlayerViewController(isGoodFriend: item.friendState == .good)
         }
@@ -374,91 +398,7 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
 
     @objc private func reportTapped() {
         guard let hostView = parent?.view ?? view else { return }
-        guard hostView.viewWithTag(51001) == nil else { return }
-
-        let overlayView = UIView()
-        overlayView.tag = 51001
-        overlayView.backgroundColor = UIColor.black.withAlphaComponent(0.46)
-        hostView.addSubview(overlayView)
-
-        let cardImageView = UIImageView(image: UIImage(named: "report_popup_background"))
-        cardImageView.contentMode = .scaleToFill
-        overlayView.addSubview(cardImageView)
-
-        let dividerView = UIView()
-        dividerView.backgroundColor = UIColor(red: 0.77, green: 0.62, blue: 0.76, alpha: 0.62)
-        overlayView.addSubview(dividerView)
-
-        let userIconImageView = UIImageView(image: UIImage(named: "report_popup_user_icon"))
-        let alertIconImageView = UIImageView(image: UIImage(named: "report_popup_alert_icon"))
-        let reportTextImageView = UIImageView(image: UIImage(named: "report_popup_report_text"))
-        let blockTextImageView = UIImageView(image: UIImage(named: "report_popup_block_text"))
-        [userIconImageView, alertIconImageView, reportTextImageView, blockTextImageView].forEach { imageView in
-            imageView.contentMode = .scaleAspectFit
-            overlayView.addSubview(imageView)
-        }
-
-        let closeButton = UIButton(type: .custom)
-        configureImageButton(closeButton, imageName: "report_popup_back_button", accessibilityLabel: "Close")
-        closeButton.addTarget(self, action: #selector(dismissReportPopup), for: .touchUpInside)
-        overlayView.addSubview(closeButton)
-
-        [
-            overlayView,
-            cardImageView,
-            dividerView,
-            userIconImageView,
-            alertIconImageView,
-            reportTextImageView,
-            blockTextImageView,
-            closeButton
-        ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
-
-        NSLayoutConstraint.activate([
-            overlayView.topAnchor.constraint(equalTo: hostView.topAnchor),
-            overlayView.leadingAnchor.constraint(equalTo: hostView.leadingAnchor),
-            overlayView.trailingAnchor.constraint(equalTo: hostView.trailingAnchor),
-            overlayView.bottomAnchor.constraint(equalTo: hostView.bottomAnchor),
-
-            cardImageView.centerXAnchor.constraint(equalTo: overlayView.centerXAnchor),
-            cardImageView.centerYAnchor.constraint(equalTo: overlayView.centerYAnchor, constant: -12),
-            cardImageView.widthAnchor.constraint(equalToConstant: 278),
-            cardImageView.heightAnchor.constraint(equalToConstant: 212),
-
-            dividerView.centerXAnchor.constraint(equalTo: cardImageView.centerXAnchor),
-            dividerView.centerYAnchor.constraint(equalTo: cardImageView.centerYAnchor, constant: -4),
-            dividerView.widthAnchor.constraint(equalToConstant: 1),
-            dividerView.heightAnchor.constraint(equalToConstant: 96),
-
-            userIconImageView.centerXAnchor.constraint(equalTo: cardImageView.leadingAnchor, constant: 84),
-            userIconImageView.topAnchor.constraint(equalTo: cardImageView.topAnchor, constant: 62),
-            userIconImageView.widthAnchor.constraint(equalToConstant: 63),
-            userIconImageView.heightAnchor.constraint(equalTo: userIconImageView.widthAnchor),
-
-            alertIconImageView.centerXAnchor.constraint(equalTo: cardImageView.trailingAnchor, constant: -84),
-            alertIconImageView.topAnchor.constraint(equalTo: userIconImageView.topAnchor),
-            alertIconImageView.widthAnchor.constraint(equalTo: userIconImageView.widthAnchor),
-            alertIconImageView.heightAnchor.constraint(equalTo: userIconImageView.heightAnchor),
-
-            reportTextImageView.centerXAnchor.constraint(equalTo: userIconImageView.centerXAnchor),
-            reportTextImageView.topAnchor.constraint(equalTo: userIconImageView.bottomAnchor, constant: 11),
-            reportTextImageView.widthAnchor.constraint(equalToConstant: 68),
-            reportTextImageView.heightAnchor.constraint(equalToConstant: 24),
-
-            blockTextImageView.centerXAnchor.constraint(equalTo: alertIconImageView.centerXAnchor),
-            blockTextImageView.topAnchor.constraint(equalTo: reportTextImageView.topAnchor),
-            blockTextImageView.widthAnchor.constraint(equalToConstant: 58),
-            blockTextImageView.heightAnchor.constraint(equalTo: reportTextImageView.heightAnchor),
-
-            closeButton.centerXAnchor.constraint(equalTo: cardImageView.centerXAnchor),
-            closeButton.centerYAnchor.constraint(equalTo: cardImageView.bottomAnchor),
-            closeButton.widthAnchor.constraint(equalToConstant: 61),
-            closeButton.heightAnchor.constraint(equalTo: closeButton.widthAnchor)
-        ])
-    }
-
-    @objc private func dismissReportPopup() {
-        (parent?.view ?? view)?.viewWithTag(51001)?.removeFromSuperview()
+        presentReportBlockPopup(in: hostView, blockedUser: mediaItems[currentIndex].blockedUser)
     }
 
     private func configureFriendStateButton() {
@@ -477,6 +417,23 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         friendStateButton.backgroundColor = state == .add
             ? UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
             : UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+    }
+
+    private func videoURL(for item: HomeMediaItem) -> URL? {
+        guard let videoResourceName = item.videoResourceName else { return nil }
+
+        if let bundledURL = Bundle.main.url(forResource: videoResourceName, withExtension: "mp4", subdirectory: "Mp3")
+            ?? Bundle.main.url(forResource: videoResourceName, withExtension: "mp4") {
+            return bundledURL
+        }
+
+        guard let resourceURL = Bundle.main.resourceURL else { return nil }
+
+        let fileName = "\(videoResourceName).mp4"
+        return FileManager.default
+            .enumerator(at: resourceURL, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .first { $0.lastPathComponent == fileName }
     }
 
     private func configureImageButton(_ button: UIButton, imageName: String, accessibilityLabel: String) {

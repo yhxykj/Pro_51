@@ -8,11 +8,67 @@
 import UIKit
 
 final class UserProfileViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+    private enum Gender {
+        case female
+        case male
+
+        var iconImageName: String {
+            switch self {
+            case .female:
+                return "user_profile_female_icon"
+            case .male:
+                return "user_profile_male_icon"
+            }
+        }
+
+        var pillImageName: String {
+            switch self {
+            case .female:
+                return "user_profile_pink_pill"
+            case .male:
+                return "user_profile_blue_pill"
+            }
+        }
+    }
+
+    private struct UserProfileData {
+        let displayName: String
+        let avatarImageName: String
+        let age: String
+        let gender: Gender
+        let friendCount: String
+        let likeCount: String
+        let dynamicItems: [UserProfileDynamicItem]
+    }
+
     private let tableView = UITableView()
-    private var dynamicLikes = [false, false, false]
+    private let profileData: UserProfileData
+    private var dynamicLikes: [Bool]
 
     override var prefersStatusBarHidden: Bool {
         true
+    }
+
+    init(displayName: String = "Angela", avatarImageName: String = "", featuredTrack: AudioPlayerTrack? = nil) {
+        let profileData = Self.makeProfileData(
+            displayName: displayName,
+            avatarImageName: avatarImageName,
+            featuredTrack: featuredTrack
+        )
+        self.profileData = profileData
+        self.dynamicLikes = profileData.dynamicItems.indices.map { $0 < 2 }
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        let profileData = Self.makeProfileData(
+            displayName: "Angela",
+            avatarImageName: "",
+            featuredTrack: nil
+        )
+        self.profileData = profileData
+        self.dynamicLikes = profileData.dynamicItems.indices.map { $0 < 2 }
+        super.init(coder: coder)
     }
 
     override func viewDidLoad() {
@@ -32,7 +88,7 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         view.addSubview(backButton)
 
-        let avatarImageView = UIImageView(image: UIImage(named: "message_avatar"))
+        let avatarImageView = UIImageView(image: UIImage(named: profileData.avatarImageName))
         avatarImageView.contentMode = .scaleAspectFill
         avatarImageView.clipsToBounds = true
         avatarImageView.layer.borderColor = UIColor.white.cgColor
@@ -40,29 +96,31 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         view.addSubview(avatarImageView)
 
         let nameLabel = UILabel()
-        nameLabel.text = "Angela"
+        nameLabel.text = profileData.displayName
         nameLabel.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
         nameLabel.font = Self.nameFont
+        nameLabel.adjustsFontSizeToFitWidth = true
+        nameLabel.minimumScaleFactor = 0.72
         view.addSubview(nameLabel)
 
-        let agePillView = UIImageView(image: UIImage(named: "user_profile_pink_pill"))
+        let agePillView = UIImageView(image: UIImage(named: profileData.gender.pillImageName))
         agePillView.contentMode = .scaleToFill
         agePillView.isUserInteractionEnabled = false
         view.addSubview(agePillView)
 
-        let genderIconImageView = UIImageView(image: UIImage(named: "user_profile_female_icon"))
+        let genderIconImageView = UIImageView(image: UIImage(named: profileData.gender.iconImageName))
         genderIconImageView.contentMode = .scaleAspectFit
         view.addSubview(genderIconImageView)
 
         let ageLabel = UILabel()
-        ageLabel.text = "24"
+        ageLabel.text = profileData.age
         ageLabel.textColor = .white
         ageLabel.font = Self.ageFont
         view.addSubview(ageLabel)
 
-        let friendCountLabel = makeStatLabel("950")
+        let friendCountLabel = makeStatLabel(profileData.friendCount)
         let friendTextLabel = makeStatLabel("friend")
-        let likeCountLabel = makeStatLabel("999+")
+        let likeCountLabel = makeStatLabel(profileData.likeCount)
         let likeTextLabel = makeStatLabel("like")
         [friendCountLabel, friendTextLabel, likeCountLabel, likeTextLabel].forEach { view.addSubview($0) }
 
@@ -138,6 +196,7 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
 
             nameLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 105),
             nameLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 23),
+            nameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 142),
             nameLabel.heightAnchor.constraint(equalToConstant: 28),
 
             agePillView.leadingAnchor.constraint(equalTo: nameLabel.trailingAnchor, constant: 16),
@@ -209,7 +268,7 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        dynamicLikes.count
+        profileData.dynamicItems.count
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
@@ -226,7 +285,8 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             return UITableViewCell()
         }
 
-        cell.configure(isLiked: dynamicLikes[indexPath.row])
+        let item = profileData.dynamicItems[indexPath.row]
+        cell.configure(item: item, isLiked: dynamicLikes[indexPath.row])
         cell.onLikeTapped = { [weak self, weak tableView] in
             guard let self else { return }
             dynamicLikes[indexPath.row].toggle()
@@ -237,7 +297,18 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: false)
-        navigationController?.pushViewController(AudioPlayerViewController(), animated: true)
+        let tracks = profileData.dynamicItems.map {
+            AudioPlayerTrack(
+                title: $0.title,
+                artist: profileData.displayName,
+                audioURL: $0.audioURL,
+                avatarImageName: profileData.avatarImageName
+            )
+        }
+        navigationController?.pushViewController(
+            AudioPlayerViewController(tracks: tracks, initialIndex: indexPath.row, isGoodFriend: true),
+            animated: true
+        )
     }
 
     private func makeStatLabel(_ text: String) -> UILabel {
@@ -261,11 +332,149 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
     }
 
     @objc private func chatTapped() {
-        navigationController?.pushViewController(FriendChatViewController(), animated: true)
+        navigationController?.pushViewController(
+            FriendChatViewController(peerName: profileData.displayName),
+            animated: true
+        )
     }
 
     @objc private func callTapped() {
         navigationController?.pushViewController(VideoCallViewController(), animated: true)
+    }
+
+    private static func makeProfileData(
+        displayName: String,
+        avatarImageName: String,
+        featuredTrack: AudioPlayerTrack?
+    ) -> UserProfileData {
+        let normalizedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = normalizedName.isEmpty ? "Angela" : normalizedName
+        let baseData = baseProfileData(for: name)
+        let profileAvatar = avatarImageName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? baseData.avatarImageName
+            : avatarImageName
+        let profileGender = gender(forAvatarImageName: profileAvatar, fallback: baseData.gender)
+        var dynamicItems = baseDynamicItems(for: name)
+
+        if let featuredTrack {
+            let featuredItem = UserProfileDynamicItem(
+                title: featuredTrack.title,
+                artist: "-\(name)",
+                albumImageName: "record_disc",
+                likeCount: baseData.featuredLikeCount,
+                audioURL: featuredTrack.audioURL
+            )
+            dynamicItems = [featuredItem] + dynamicItems.filter { $0.title != featuredItem.title }
+        }
+
+        return UserProfileData(
+            displayName: name,
+            avatarImageName: profileAvatar,
+            age: baseData.age,
+            gender: profileGender,
+            friendCount: baseData.friendCount,
+            likeCount: baseData.likeCount,
+            dynamicItems: dynamicItems
+        )
+    }
+
+    private static func baseProfileData(
+        for displayName: String
+    ) -> (age: String, gender: Gender, friendCount: String, likeCount: String, avatarImageName: String, featuredLikeCount: String) {
+        switch normalized(displayName) {
+        case "annie":
+            return ("24", .male, "950", "999+", "avatar_01", "100w")
+        case "miley cyrus":
+            return ("26", .male, "883", "768", "avatar_02", "96w")
+        case "lady gaga":
+            return ("27", .female, "1K", "996", "avatar_03", "92w")
+        case "angela":
+            return ("24", .female, "950", "999+", "avatar_04", "100w")
+        case "rihanna":
+            return ("25", .female, "928", "887", "avatar_05", "88w")
+        case "kylie":
+            return ("23", .female, "786", "689", "avatar_06", "82w")
+        default:
+            return ("24", .female, "950", "999+", "message_avatar", "100w")
+        }
+    }
+
+    private static func gender(forAvatarImageName avatarImageName: String, fallback: Gender) -> Gender {
+        switch avatarImageName {
+        case "avatar_01", "avatar_02", "avatar_08", "avatar_09", "avatar_12", "avatar_13", "avatar_17", "avatar_19":
+            return .male
+        case "avatar_03", "avatar_04", "avatar_05", "avatar_06", "avatar_07", "avatar_10", "avatar_11", "avatar_14", "avatar_15", "avatar_16", "avatar_18", "avatar_20", "message_avatar":
+            return .female
+        default:
+            return fallback
+        }
+    }
+
+    private static func baseDynamicItems(for displayName: String) -> [UserProfileDynamicItem] {
+        let artist = "-\(displayName)"
+        switch normalized(displayName) {
+        case "annie":
+            return [
+                dynamicItem("Best Me 50 Feet Cover", artist: artist, likeCount: "100w", audioResourceName: "best_me_50_feet_cover")
+            ]
+        case "miley cyrus":
+            return [
+                dynamicItem("Flowers", artist: artist, likeCount: "96w", audioResourceName: "flowers_miley_cyrus")
+            ]
+        case "lady gaga":
+            return [
+                dynamicItem("Lady Gaga Live", artist: artist, likeCount: "92w", audioResourceName: "lady_gaga_live")
+            ]
+        case "angela":
+            return [
+                dynamicItem("Love Is Gone", artist: artist, likeCount: "100w", audioResourceName: "love_is_gone")
+            ]
+        case "rihanna":
+            return [
+                dynamicItem("Diamonds", artist: artist, likeCount: "88w", audioResourceName: "diamonds_rihanna_chaoshan_cover")
+            ]
+        case "kylie":
+            return [
+                dynamicItem("Can't Get You Out Of My Head", artist: artist, likeCount: "82w", audioResourceName: "cant_get_you_out_of_my_head_live")
+            ]
+        default:
+            return []
+        }
+    }
+
+    private static func dynamicItem(
+        _ title: String,
+        artist: String,
+        likeCount: String,
+        audioResourceName: String
+    ) -> UserProfileDynamicItem {
+        UserProfileDynamicItem(
+            title: title,
+            artist: artist,
+            albumImageName: "record_disc",
+            likeCount: likeCount,
+            audioURL: audioURL(forResource: audioResourceName)
+        )
+    }
+
+    private static func audioURL(forResource resourceName: String) -> URL? {
+        if let bundledURL = Bundle.main.url(forResource: resourceName, withExtension: "mp3", subdirectory: "Mp3")
+            ?? Bundle.main.url(forResource: resourceName, withExtension: "mp3") {
+            return bundledURL
+        }
+
+        guard let resourceURL = Bundle.main.resourceURL else { return nil }
+
+        let fileName = "\(resourceName).mp3"
+        return FileManager.default
+            .enumerator(at: resourceURL, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .first { $0.lastPathComponent == fileName }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.trimmingCharacters(in: CharacterSet(charactersIn: "- "))
+            .lowercased()
     }
 
     private static var nameFont: UIFont {

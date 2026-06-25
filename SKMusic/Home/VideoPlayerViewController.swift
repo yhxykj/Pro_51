@@ -8,44 +8,92 @@
 import AVFoundation
 import UIKit
 
+struct VideoPlayerTrack {
+    let videoURL: URL?
+    let coverImageName: String
+    let ownerName: String
+    let avatarImageName: String
+
+    init(videoURL: URL?, coverImageName: String, ownerName: String = "Annie", avatarImageName: String = "avatar_01") {
+        self.videoURL = videoURL
+        self.coverImageName = coverImageName
+        self.ownerName = ownerName
+        self.avatarImageName = avatarImageName
+    }
+
+    var blockedUser: BlockedUser {
+        BlockedUser(identifier: ownerName, displayName: ownerName, avatarImageName: avatarImageName)
+    }
+}
+
 final class VideoPlayerViewController: UIViewController {
-    private let videoURL: URL?
-    private let coverImageName: String
+    private let tracks: [VideoPlayerTrack]
+    private var currentIndex: Int
+    private var currentTrack: VideoPlayerTrack {
+        tracks[currentIndex]
+    }
+
     private let playerView = PlayerView()
     private let coverImageView = UIImageView()
     private let playPauseButton = UIButton(type: .custom)
+    private let progressSlider = UISlider()
+    private let elapsedTimeLabel = UILabel()
+    private let totalTimeLabel = UILabel()
+    private weak var ownerNameLabel: UILabel?
+    private weak var likeButton: UIButton?
     private var player: AVPlayer?
+    private var timeObserverToken: Any?
+    private var itemEndObserver: NSObjectProtocol?
+    private var isScrubbing = false
+    private var wasPlayingBeforeScrubbing = false
 
     override var prefersStatusBarHidden: Bool {
         true
     }
 
     init(videoURL: URL? = nil, coverImageName: String = "video_cover") {
-        self.videoURL = videoURL
-        self.coverImageName = coverImageName
+        self.tracks = [VideoPlayerTrack(videoURL: videoURL, coverImageName: coverImageName)]
+        self.currentIndex = 0
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    init(tracks: [VideoPlayerTrack], initialIndex: Int = 0) {
+        let resolvedTracks = tracks.isEmpty
+            ? [VideoPlayerTrack(videoURL: nil, coverImageName: "video_cover")]
+            : tracks
+
+        self.tracks = resolvedTracks
+        self.currentIndex = min(max(initialIndex, 0), resolvedTracks.count - 1)
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
-        self.videoURL = nil
-        self.coverImageName = "video_cover"
+        self.tracks = [VideoPlayerTrack(videoURL: nil, coverImageName: "video_cover")]
+        self.currentIndex = 0
         super.init(coder: coder)
+    }
+
+    deinit {
+        removeTimeObserver()
+        removeItemEndObserver()
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
-        setupPlayerIfNeeded()
+        configureCurrentTrack(autoplay: false)
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         player?.play()
+        updatePlayPauseButton()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         player?.pause()
+        updatePlayPauseButton()
     }
 
     private func setupViews() {
@@ -66,6 +114,7 @@ final class VideoPlayerViewController: UIViewController {
 
         let reportButton = UIButton(type: .custom)
         configureImageButton(reportButton, imageName: "report_icon", accessibilityLabel: "Report")
+        reportButton.addTarget(self, action: #selector(reportTapped), for: .touchUpInside)
         view.addSubview(reportButton)
 
         let mediaContainerView = UIView()
@@ -77,16 +126,21 @@ final class VideoPlayerViewController: UIViewController {
         playerView.backgroundColor = .black
         mediaContainerView.addSubview(playerView)
 
-        coverImageView.image = UIImage(named: coverImageName)
+        coverImageView.image = UIImage(named: currentTrack.coverImageName)
         coverImageView.contentMode = .scaleAspectFill
         mediaContainerView.addSubview(coverImageView)
 
         let songTitleImageView = UIImageView(image: UIImage(named: "song_title_head_clouds"))
-        let artistImageView = UIImageView(image: UIImage(named: "artist_annie"))
-        [songTitleImageView, artistImageView].forEach { imageView in
-            imageView.contentMode = .scaleAspectFit
-            view.addSubview(imageView)
-        }
+        songTitleImageView.contentMode = .scaleAspectFit
+        view.addSubview(songTitleImageView)
+
+        let ownerNameLabel = UILabel()
+        configureOwnerNameLabel(ownerNameLabel)
+        ownerNameLabel.text = currentTrack.ownerName
+        ownerNameLabel.isUserInteractionEnabled = true
+        ownerNameLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(ownerNameTapped)))
+        view.addSubview(ownerNameLabel)
+        self.ownerNameLabel = ownerNameLabel
 
         let addFriendButton = UIButton(type: .custom)
         addFriendButton.backgroundColor = UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
@@ -96,52 +150,43 @@ final class VideoPlayerViewController: UIViewController {
         addFriendButton.titleLabel?.font = Self.friendButtonFont
         addFriendButton.titleLabel?.adjustsFontSizeToFitWidth = true
         addFriendButton.titleLabel?.minimumScaleFactor = 0.78
+        addFriendButton.addTarget(self, action: #selector(addFriendTapped), for: .touchUpInside)
         view.addSubview(addFriendButton)
 
         let likeButton = UIButton(type: .custom)
-        configureImageButton(likeButton, imageName: "like_icon", accessibilityLabel: "Like")
+        configureImageButton(likeButton, imageName: "unlike_icon", accessibilityLabel: "Not Liked")
+        likeButton.addTarget(self, action: #selector(likeTapped), for: .touchUpInside)
         view.addSubview(likeButton)
+        self.likeButton = likeButton
 
         let likeCountLabel = UILabel()
         configureCountLabel(likeCountLabel)
         likeCountLabel.text = "99+"
         view.addSubview(likeCountLabel)
 
-        let progressSlider = UISlider()
         configureProgressSlider(progressSlider)
         view.addSubview(progressSlider)
 
-        let elapsedTimeLabel = UILabel()
-        let totalTimeLabel = UILabel()
-        configureTimeLabel(elapsedTimeLabel, text: "00:18", alignment: .left)
-        configureTimeLabel(totalTimeLabel, text: "03:18", alignment: .right)
+        configureTimeLabel(elapsedTimeLabel, text: "00:00", alignment: .left)
+        configureTimeLabel(totalTimeLabel, text: "00:00", alignment: .right)
         view.addSubview(elapsedTimeLabel)
         view.addSubview(totalTimeLabel)
 
-        let repeatButton = UIButton(type: .custom)
         let previousButton = UIButton(type: .custom)
         let nextButton = UIButton(type: .custom)
-        let commentButton = UIButton(type: .custom)
-        configureImageButton(repeatButton, imageName: "repeat_one_button", accessibilityLabel: "Repeat")
         configureImageButton(previousButton, imageName: "previous_button", accessibilityLabel: "Previous")
-        configureImageButton(playPauseButton, imageName: "play_pause_button", accessibilityLabel: "Play")
+        configureImageButton(playPauseButton, imageName: "player_control_play_button", accessibilityLabel: "Play")
         configureImageButton(nextButton, imageName: "next_button", accessibilityLabel: "Next")
-        configureImageButton(commentButton, imageName: "comment_icon", accessibilityLabel: "Comment")
+        previousButton.addTarget(self, action: #selector(previousTapped), for: .touchUpInside)
         playPauseButton.addTarget(self, action: #selector(playTapped), for: .touchUpInside)
-        commentButton.addTarget(self, action: #selector(messageTapped), for: .touchUpInside)
+        nextButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
 
         let controlsStackView = UIStackView()
         controlsStackView.axis = .horizontal
         controlsStackView.alignment = .center
         controlsStackView.distribution = .equalSpacing
-        controlsStackView.setCustomSpacing(28, after: nextButton)
-        [repeatButton, previousButton, playPauseButton, nextButton, commentButton].forEach { controlsStackView.addArrangedSubview($0) }
+        [previousButton, playPauseButton, nextButton].forEach { controlsStackView.addArrangedSubview($0) }
         view.addSubview(controlsStackView)
-
-        let commentCountLabel = UILabel()
-        configureCountLabel(commentCountLabel)
-        commentCountLabel.text = "99+"
-        view.addSubview(commentCountLabel)
 
         [
             backgroundImageView,
@@ -152,7 +197,7 @@ final class VideoPlayerViewController: UIViewController {
             playerView,
             coverImageView,
             songTitleImageView,
-            artistImageView,
+            ownerNameLabel,
             addFriendButton,
             likeButton,
             likeCountLabel,
@@ -160,15 +205,12 @@ final class VideoPlayerViewController: UIViewController {
             elapsedTimeLabel,
             totalTimeLabel,
             controlsStackView,
-            repeatButton,
             previousButton,
             playPauseButton,
-            nextButton,
-            commentButton,
-            commentCountLabel
+            nextButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
-        [repeatButton, previousButton, playPauseButton, nextButton, commentButton].forEach { button in
+        [previousButton, playPauseButton, nextButton].forEach { button in
             NSLayoutConstraint.activate([
                 button.widthAnchor.constraint(equalToConstant: 54),
                 button.heightAnchor.constraint(equalToConstant: 54)
@@ -223,28 +265,28 @@ final class VideoPlayerViewController: UIViewController {
             songTitleImageView.widthAnchor.constraint(lessThanOrEqualTo: mediaContainerView.widthAnchor, multiplier: 0.76),
             songTitleImageView.heightAnchor.constraint(equalToConstant: 40),
 
-            artistImageView.topAnchor.constraint(equalTo: songTitleImageView.bottomAnchor, constant: 2),
-            artistImageView.leadingAnchor.constraint(equalTo: songTitleImageView.leadingAnchor),
-            artistImageView.widthAnchor.constraint(equalToConstant: 70),
-            artistImageView.heightAnchor.constraint(equalToConstant: 31),
+            ownerNameLabel.topAnchor.constraint(equalTo: songTitleImageView.bottomAnchor, constant: 2),
+            ownerNameLabel.leadingAnchor.constraint(equalTo: songTitleImageView.leadingAnchor),
+            ownerNameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 142),
+            ownerNameLabel.heightAnchor.constraint(equalToConstant: 31),
 
-            addFriendButton.centerYAnchor.constraint(equalTo: artistImageView.centerYAnchor),
-            addFriendButton.leadingAnchor.constraint(equalTo: artistImageView.trailingAnchor, constant: 16),
+            addFriendButton.centerYAnchor.constraint(equalTo: ownerNameLabel.centerYAnchor),
+            addFriendButton.leadingAnchor.constraint(equalTo: ownerNameLabel.trailingAnchor, constant: 16),
+            addFriendButton.trailingAnchor.constraint(lessThanOrEqualTo: likeButton.leadingAnchor, constant: -12),
             addFriendButton.widthAnchor.constraint(equalToConstant: 112),
             addFriendButton.heightAnchor.constraint(equalToConstant: 22),
 
-            likeButton.centerYAnchor.constraint(equalTo: artistImageView.centerYAnchor),
-            likeButton.trailingAnchor.constraint(equalTo: mediaContainerView.trailingAnchor, constant: -24),
+            likeButton.centerYAnchor.constraint(equalTo: ownerNameLabel.centerYAnchor),
+            likeButton.trailingAnchor.constraint(equalTo: likeCountLabel.leadingAnchor, constant: -4),
             likeButton.widthAnchor.constraint(equalToConstant: 45),
             likeButton.heightAnchor.constraint(equalTo: likeButton.widthAnchor),
 
-            likeCountLabel.leadingAnchor.constraint(equalTo: likeButton.trailingAnchor, constant: 4),
             likeCountLabel.centerYAnchor.constraint(equalTo: likeButton.centerYAnchor, constant: 8),
-            likeCountLabel.trailingAnchor.constraint(lessThanOrEqualTo: mediaContainerView.trailingAnchor),
-            likeCountLabel.widthAnchor.constraint(equalToConstant: 36),
+            likeCountLabel.trailingAnchor.constraint(equalTo: mediaContainerView.trailingAnchor, constant: -8),
+            likeCountLabel.widthAnchor.constraint(equalToConstant: 54),
             likeCountLabel.heightAnchor.constraint(equalToConstant: 18),
 
-            progressSlider.topAnchor.constraint(equalTo: artistImageView.bottomAnchor, constant: 22),
+            progressSlider.topAnchor.constraint(equalTo: ownerNameLabel.bottomAnchor, constant: 22),
             progressSlider.leadingAnchor.constraint(equalTo: mediaContainerView.leadingAnchor, constant: 8),
             progressSlider.trailingAnchor.constraint(equalTo: mediaContainerView.trailingAnchor, constant: -8),
             progressSlider.heightAnchor.constraint(equalToConstant: 22),
@@ -261,28 +303,150 @@ final class VideoPlayerViewController: UIViewController {
 
             controlsStackView.topAnchor.constraint(equalTo: elapsedTimeLabel.bottomAnchor, constant: 10),
             controlsStackView.centerXAnchor.constraint(equalTo: mediaContainerView.centerXAnchor),
-            controlsStackView.widthAnchor.constraint(equalTo: mediaContainerView.widthAnchor),
+            controlsStackView.widthAnchor.constraint(equalToConstant: 220),
+            controlsStackView.widthAnchor.constraint(lessThanOrEqualTo: mediaContainerView.widthAnchor),
             controlsStackView.heightAnchor.constraint(equalToConstant: 58),
-            controlsStackView.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-
-            commentCountLabel.leadingAnchor.constraint(equalTo: commentButton.trailingAnchor, constant: -5),
-            commentCountLabel.trailingAnchor.constraint(lessThanOrEqualTo: mediaContainerView.trailingAnchor),
-            commentCountLabel.centerYAnchor.constraint(equalTo: commentButton.centerYAnchor, constant: 11),
-            commentCountLabel.widthAnchor.constraint(equalToConstant: 39),
-            commentCountLabel.heightAnchor.constraint(equalToConstant: 18)
+            controlsStackView.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24)
         ])
     }
 
-    private func setupPlayerIfNeeded() {
-        guard let videoURL else {
+    private func configureCurrentTrack(autoplay: Bool) {
+        coverImageView.image = UIImage(named: currentTrack.coverImageName)
+        ownerNameLabel?.text = currentTrack.ownerName
+        resetProgress()
+        removeTimeObserver()
+        removeItemEndObserver()
+
+        guard let videoURL = currentTrack.videoURL else {
+            player?.replaceCurrentItem(with: nil)
             playerView.isHidden = true
+            coverImageView.isHidden = false
+            updatePlayPauseButton()
+            updateLikeButton()
             return
         }
 
-        let player = AVPlayer(url: videoURL)
-        self.player = player
-        playerView.player = player
+        configureAudioSession()
+
+        let playerItem = AVPlayerItem(url: videoURL)
+
+        if let player {
+            player.replaceCurrentItem(with: playerItem)
+            player.isMuted = false
+            player.volume = 1
+        } else {
+            let player = AVPlayer(playerItem: playerItem)
+            player.isMuted = false
+            player.volume = 1
+            self.player = player
+            playerView.player = player
+        }
+
+        playerView.isHidden = false
         coverImageView.isHidden = true
+        addTimeObserver()
+        observeEnd(of: playerItem)
+        updateProgress()
+
+        if autoplay {
+            player?.play()
+        }
+
+        updatePlayPauseButton()
+        updateLikeButton()
+    }
+
+    private func configureAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            return
+        }
+    }
+
+    private func addTimeObserver() {
+        guard timeObserverToken == nil, let player else { return }
+
+        let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
+            self?.updateProgress()
+        }
+    }
+
+    private func removeTimeObserver() {
+        guard let timeObserverToken else { return }
+        player?.removeTimeObserver(timeObserverToken)
+        self.timeObserverToken = nil
+    }
+
+    private func observeEnd(of item: AVPlayerItem) {
+        itemEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            self?.playerDidFinishPlaying()
+        }
+    }
+
+    private func removeItemEndObserver() {
+        guard let itemEndObserver else { return }
+        NotificationCenter.default.removeObserver(itemEndObserver)
+        self.itemEndObserver = nil
+    }
+
+    private func resetProgress() {
+        progressSlider.minimumValue = 0
+        progressSlider.maximumValue = 1
+        progressSlider.value = 0
+        elapsedTimeLabel.text = "00:00"
+        totalTimeLabel.text = "00:00"
+    }
+
+    private func updateProgress() {
+        let current = sanitizedSeconds(player?.currentTime().seconds ?? 0)
+        let duration = currentDuration()
+        let sliderMaximum = max(duration, 1)
+
+        progressSlider.maximumValue = Float(sliderMaximum)
+
+        if !isScrubbing {
+            progressSlider.value = Float(min(max(current, 0), sliderMaximum))
+        }
+
+        elapsedTimeLabel.text = formattedTime(current)
+        totalTimeLabel.text = duration > 0 ? formattedTime(duration) : "00:00"
+    }
+
+    private func currentDuration() -> Double {
+        if let itemDuration = player?.currentItem?.duration.seconds {
+            let seconds = sanitizedSeconds(itemDuration)
+            if seconds > 0 {
+                return seconds
+            }
+        }
+
+        if let assetDuration = player?.currentItem?.asset.duration.seconds {
+            let seconds = sanitizedSeconds(assetDuration)
+            if seconds > 0 {
+                return seconds
+            }
+        }
+
+        return 0
+    }
+
+    private func sanitizedSeconds(_ value: Double) -> Double {
+        guard value.isFinite, !value.isNaN, value > 0 else { return 0 }
+        return value
+    }
+
+    private func formattedTime(_ seconds: Double) -> String {
+        let roundedSeconds = max(Int(seconds.rounded()), 0)
+        let minutes = roundedSeconds / 60
+        let seconds = roundedSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 
     private func configureImageButton(_ button: UIButton, imageName: String, accessibilityLabel: String) {
@@ -294,11 +458,14 @@ final class VideoPlayerViewController: UIViewController {
 
     private func configureProgressSlider(_ slider: UISlider) {
         slider.minimumValue = 0
-        slider.maximumValue = 198
-        slider.value = 18
+        slider.maximumValue = 1
+        slider.value = 0
         slider.minimumTrackTintColor = UIColor(red: 0.18, green: 0.18, blue: 0.18, alpha: 1)
         slider.maximumTrackTintColor = UIColor(red: 0.62, green: 0.62, blue: 0.62, alpha: 1)
         slider.thumbTintColor = UIColor(red: 0.22, green: 0.22, blue: 0.22, alpha: 1)
+        slider.addTarget(self, action: #selector(progressTouchDown), for: .touchDown)
+        slider.addTarget(self, action: #selector(progressValueChanged), for: .valueChanged)
+        slider.addTarget(self, action: #selector(progressTouchUp), for: [.touchUpInside, .touchUpOutside, .touchCancel])
     }
 
     private func configureTimeLabel(_ label: UILabel, text: String, alignment: NSTextAlignment) {
@@ -315,22 +482,156 @@ final class VideoPlayerViewController: UIViewController {
         label.minimumScaleFactor = 0.8
     }
 
+    private func configureOwnerNameLabel(_ label: UILabel) {
+        label.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
+        label.font = Self.ownerNameFont
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.65
+        label.lineBreakMode = .byTruncatingTail
+    }
+
+    @objc private func progressTouchDown() {
+        guard player != nil else { return }
+        isScrubbing = true
+        wasPlayingBeforeScrubbing = player?.timeControlStatus == .playing || (player?.rate ?? 0) > 0
+        player?.pause()
+        updatePlayPauseButton()
+    }
+
+    @objc private func progressValueChanged() {
+        elapsedTimeLabel.text = formattedTime(Double(progressSlider.value))
+    }
+
+    @objc private func progressTouchUp() {
+        guard let player else {
+            isScrubbing = false
+            return
+        }
+
+        let seconds = Double(progressSlider.value)
+        let targetTime = CMTime(seconds: seconds, preferredTimescale: 600)
+        isScrubbing = false
+
+        player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            guard let self else { return }
+            self.updateProgress()
+
+            if self.wasPlayingBeforeScrubbing {
+                self.player?.play()
+            }
+
+            self.wasPlayingBeforeScrubbing = false
+            self.updatePlayPauseButton()
+        }
+    }
+
     @objc private func playTapped() {
         guard let player else { return }
 
         if player.timeControlStatus == .playing {
             player.pause()
         } else {
+            let duration = currentDuration()
+            let current = sanitizedSeconds(player.currentTime().seconds)
+
+            if duration > 0, current >= duration - 0.2 {
+                player.seek(to: .zero)
+            }
+
             player.play()
         }
+        updatePlayPauseButton()
+    }
+
+    @objc private func previousTapped() {
+        guard tracks.count > 1 else {
+            player?.seek(to: .zero)
+            updateProgress()
+            return
+        }
+
+        currentIndex = (currentIndex - 1 + tracks.count) % tracks.count
+        configureCurrentTrack(autoplay: true)
+    }
+
+    @objc private func nextTapped() {
+        guard tracks.count > 1 else {
+            player?.seek(to: .zero)
+            updateProgress()
+            return
+        }
+
+        currentIndex = (currentIndex + 1) % tracks.count
+        configureCurrentTrack(autoplay: true)
+    }
+
+    private func playerDidFinishPlaying() {
+        player?.seek(to: .zero)
+        updateProgress()
+        updatePlayPauseButton()
+    }
+
+    private func updatePlayPauseButton() {
+        let isPlaying = player?.timeControlStatus == .playing || (player?.rate ?? 0) > 0
+        let imageName = isPlaying ? "play_pause_button" : "player_control_play_button"
+        playPauseButton.setImage(UIImage(named: imageName), for: .normal)
+        playPauseButton.accessibilityLabel = isPlaying ? "Pause" : "Play"
+    }
+
+    private func likeStorageKey() -> String {
+        let identifier = currentTrack.videoURL?.lastPathComponent ?? currentTrack.coverImageName
+        return "skmusic.videoPlayer.liked.\(identifier)"
+    }
+
+    private func isLiked() -> Bool {
+        UserDefaults.standard.bool(forKey: likeStorageKey())
+    }
+
+    private func updateLikeButton() {
+        let liked = isLiked()
+        let imageName = liked ? "like_icon" : "unlike_icon"
+        likeButton?.setImage(UIImage(named: imageName), for: .normal)
+        likeButton?.accessibilityLabel = liked ? "Liked" : "Not Liked"
+    }
+
+    @objc private func likeTapped() {
+        let newValue = !isLiked()
+        let key = likeStorageKey()
+
+        if newValue {
+            UserDefaults.standard.set(true, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        updateLikeButton()
+    }
+
+    @objc private func addFriendTapped() {
+        showNotice("Friend request sent successfully.")
     }
 
     @objc private func backTapped() {
         navigationController?.popViewController(animated: true)
     }
 
-    @objc private func messageTapped() {
-        switchToMainMessageTab()
+    @objc private func reportTapped() {
+        guard let hostView = navigationController?.view ?? view else { return }
+        presentReportBlockPopup(in: hostView, blockedUser: currentTrack.blockedUser)
+    }
+
+    @objc private func ownerNameTapped() {
+        let profileViewController = UserProfileViewController(
+            displayName: currentTrack.ownerName,
+            avatarImageName: currentTrack.avatarImageName
+        )
+        navigationController?.pushViewController(profileViewController, animated: true)
+    }
+
+    private func showNotice(_ message: String) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     private static var friendButtonFont: UIFont {
@@ -343,6 +644,10 @@ final class VideoPlayerViewController: UIViewController {
 
     private static var countFont: UIFont {
         UIFont(name: "AvenirNext-Bold", size: 14) ?? .boldSystemFont(ofSize: 14)
+    }
+
+    private static var ownerNameFont: UIFont {
+        UIFont(name: "AvenirNext-HeavyItalic", size: 20) ?? .italicSystemFont(ofSize: 20)
     }
 }
 

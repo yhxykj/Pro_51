@@ -125,15 +125,15 @@ final class MessageTableViewCell: UITableViewCell {
             avatarImageView.widthAnchor.constraint(equalToConstant: 58),
             avatarImageView.heightAnchor.constraint(equalTo: avatarImageView.widthAnchor),
 
-            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 18),
+            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 15),
             titleLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 16),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: cardView.trailingAnchor, constant: -18),
-            titleLabel.heightAnchor.constraint(equalToConstant: 22),
+            titleLabel.heightAnchor.constraint(equalToConstant: 24),
 
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -18),
-            subtitleLabel.heightAnchor.constraint(equalToConstant: 18)
+            subtitleLabel.heightAnchor.constraint(equalToConstant: 20)
         ])
     }
 
@@ -191,10 +191,10 @@ final class MessageTableViewCell: UITableViewCell {
     }
 
     private static var titleFont: UIFont {
-        UIFont(name: "AvenirNext-HeavyItalic", size: 19) ?? .italicSystemFont(ofSize: 19)
+        UIFont(name: "AvenirNext-HeavyItalic", size: 21) ?? .italicSystemFont(ofSize: 21)
     }
 
     private static var subtitleFont: UIFont {
-        UIFont(name: "AvenirNext-BoldItalic", size: 13) ?? .italicSystemFont(ofSize: 13)
+        UIFont(name: "AvenirNext-BoldItalic", size: 15) ?? .italicSystemFont(ofSize: 15)
     }
 }

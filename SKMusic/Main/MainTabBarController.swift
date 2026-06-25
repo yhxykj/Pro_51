@@ -48,10 +48,10 @@ final class MainTabBarController: UIViewController {
 
     private func setupTabs() {
         tabs = [
-            TabItem(viewController: HomeViewController(), iconName: "tab_home", selectedIconName: "tab_home_highlight", accessibilityLabel: "Home"),
-            TabItem(viewController: MainContentViewController(), iconName: "tab_share", selectedIconName: "tab_share_highlight", accessibilityLabel: "Share"),
+            TabItem(viewController: RecommendationViewController(usesExternalTabBar: true), iconName: "tab_home", selectedIconName: "tab_home_highlight", accessibilityLabel: "Home"),
+            TabItem(viewController: FriendsUpdatesViewController(), iconName: "tab_share", selectedIconName: "tab_share_highlight", accessibilityLabel: "Share"),
             TabItem(viewController: MessageListViewController(), iconName: "tab_chat", selectedIconName: "tab_chat_highlight", accessibilityLabel: "Chat"),
-            TabItem(viewController: MainContentViewController(), iconName: "tab_profile", selectedIconName: "tab_profile_highlight", accessibilityLabel: "Profile")
+            TabItem(viewController: MyProfileViewController(), iconName: "tab_profile", selectedIconName: "tab_profile_highlight", accessibilityLabel: "Profile")
         ]
     }
 
@@ -146,14 +146,6 @@ final class MainTabBarController: UIViewController {
     }
 
     @objc private func tabButtonTapped(_ sender: UIButton) {
-        if sender.tag == 1 {
-            let navigationController = navigationController ?? parent?.navigationController
-            if !(navigationController?.topViewController is RecommendationViewController) {
-                navigationController?.pushViewController(RecommendationViewController(), animated: true)
-            }
-            return
-        }
-
         selectTab(at: sender.tag)
     }
 }
@@ -191,36 +183,5 @@ extension UIViewController {
 
         mainTabBarController.showTab(at: index)
         navigationController.popToViewController(mainTabBarController, animated: true)
-    }
-}
-
-private final class MainContentViewController: UIViewController {
-    private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
-
-    override var prefersStatusBarHidden: Bool {
-        true
-    }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        setupViews()
-        setupConstraints()
-    }
-
-    private func setupViews() {
-        view.backgroundColor = .white
-        backgroundImageView.contentMode = .scaleToFill
-        backgroundImageView.isUserInteractionEnabled = false
-        view.addSubview(backgroundImageView)
-    }
-
-    private func setupConstraints() {
-        backgroundImageView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            backgroundImageView.topAnchor.constraint(equalTo: view.topAnchor),
-            backgroundImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            backgroundImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
     }
 }

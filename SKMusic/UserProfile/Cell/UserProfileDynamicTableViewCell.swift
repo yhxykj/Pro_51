@@ -7,6 +7,14 @@
 
 import UIKit
 
+struct UserProfileDynamicItem {
+    let title: String
+    let artist: String
+    let albumImageName: String
+    let likeCount: String
+    let audioURL: URL?
+}
+
 final class UserProfileDynamicTableViewCell: UITableViewCell {
     static let reuseIdentifier = "UserProfileDynamicTableViewCell"
 
@@ -36,10 +44,27 @@ final class UserProfileDynamicTableViewCell: UITableViewCell {
         onLikeTapped = nil
     }
 
-    func configure(isLiked: Bool) {
+    func configure(item: UserProfileDynamicItem, isLiked: Bool) {
+        albumImageView.image = UIImage(named: item.albumImageName)
+        titleLabel.text = item.title
+        artistLabel.text = item.artist
+        countLabel.text = item.likeCount
         likeButton.setImage(
             UIImage(named: isLiked ? "user_profile_liked_icon" : "user_profile_unliked_icon"),
             for: .normal
+        )
+    }
+
+    func configure(isLiked: Bool) {
+        configure(
+            item: UserProfileDynamicItem(
+                title: "Insula (Dirty Nano Remix)",
+                artist: "-Annie",
+                albumImageName: "record_disc",
+                likeCount: "100w",
+                audioURL: nil
+            ),
+            isLiked: isLiked
         )
     }
 
@@ -63,16 +88,16 @@ final class UserProfileDynamicTableViewCell: UITableViewCell {
         albumImageView.clipsToBounds = true
         cardView.addSubview(albumImageView)
 
-        titleLabel.text = "Insula (Dirty Nano Remix)"
         titleLabel.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
         titleLabel.font = Self.titleFont
         titleLabel.adjustsFontSizeToFitWidth = true
         titleLabel.minimumScaleFactor = 0.72
         cardView.addSubview(titleLabel)
 
-        artistLabel.text = "-Annie"
         artistLabel.textColor = titleLabel.textColor
         artistLabel.font = Self.artistFont
+        artistLabel.adjustsFontSizeToFitWidth = true
+        artistLabel.minimumScaleFactor = 0.75
         cardView.addSubview(artistLabel)
 
         playImageView.contentMode = .scaleAspectFit
@@ -82,9 +107,10 @@ final class UserProfileDynamicTableViewCell: UITableViewCell {
         likeButton.addTarget(self, action: #selector(likeTapped), for: .touchUpInside)
         contentView.addSubview(likeButton)
 
-        countLabel.text = "100w"
         countLabel.textColor = UIColor(red: 0.20, green: 0.20, blue: 0.21, alpha: 1)
         countLabel.font = Self.countFont
+        countLabel.adjustsFontSizeToFitWidth = true
+        countLabel.minimumScaleFactor = 0.75
         contentView.addSubview(countLabel)
 
         detailImageView.contentMode = .scaleAspectFit

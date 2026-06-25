@@ -237,10 +237,29 @@ final class RegisterViewController: UIViewController, UITextFieldDelegate {
 
     @objc private func continueTapped() {
         view.endEditing(true)
+        let email = emailTextField.text ?? ""
+        let password = passwordTextField.text ?? ""
+
+        guard AuthSession.canSignIn(email: email, password: password) else {
+            showSignUpFailedAlert()
+            return
+        }
+
+        AuthSession.start(email: email)
         navigationController?.pushViewController(EditProfileViewController(), animated: true)
     }
 
     @objc private func dismissKeyboard() {
         view.endEditing(true)
+    }
+
+    private func showSignUpFailedAlert() {
+        let alert = UIAlertController(
+            title: "Sign up failed",
+            message: "Please use the test account music666@gmail.com with password 123456.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }

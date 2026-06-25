@@ -10,21 +10,147 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
-final class RecommendationViewController: UIViewController, PHPickerViewControllerDelegate {
+final class RecommendationViewController: UIViewController, PHPickerViewControllerDelegate, UIGestureRecognizerDelegate {
     private struct RecommendationSong {
         let title: String
         let artist: String
         let note: String
+        let avatarImageName: String
+        let audioResourceName: String
+
+        var blockedUser: BlockedUser {
+            let displayName = artist.trimmingCharacters(in: CharacterSet(charactersIn: "- "))
+            return BlockedUser(identifier: displayName, displayName: displayName, avatarImageName: avatarImageName)
+        }
     }
 
+    private struct RecommendationVideo {
+        let coverImageName: String
+        let videoResourceName: String
+        let likes: String
+        let ownerName: String
+        let avatarImageName: String
+
+        init(
+            coverImageName: String,
+            videoResourceName: String,
+            likes: String,
+            ownerName: String = "Annie",
+            avatarImageName: String = "avatar_01"
+        ) {
+            self.coverImageName = coverImageName
+            self.videoResourceName = videoResourceName
+            self.likes = likes
+            self.ownerName = ownerName
+            self.avatarImageName = avatarImageName
+        }
+
+        var blockedUser: BlockedUser {
+            BlockedUser(identifier: ownerName, displayName: ownerName, avatarImageName: avatarImageName)
+        }
+    }
+
+    private let videos = [
+        RecommendationVideo(
+            coverImageName: "recommendation_live_crowd_cover",
+            videoResourceName: "recommendation_live_crowd_video",
+            likes: "128",
+            ownerName: "Annie",
+            avatarImageName: "avatar_01"
+        ),
+        RecommendationVideo(
+            coverImageName: "recommendation_beach_dance_cover",
+            videoResourceName: "recommendation_beach_dance_video",
+            likes: "99+",
+            ownerName: "Bella",
+            avatarImageName: "avatar_02"
+        ),
+        RecommendationVideo(
+            coverImageName: "recommendation_sunset_skate_cover",
+            videoResourceName: "recommendation_sunset_skate_video",
+            likes: "86",
+            ownerName: "Chloe",
+            avatarImageName: "avatar_03"
+        ),
+        RecommendationVideo(
+            coverImageName: "recommendation_moody_stage_cover",
+            videoResourceName: "recommendation_moody_stage_video",
+            likes: "74",
+            ownerName: "Daisy",
+            avatarImageName: "avatar_04"
+        ),
+        RecommendationVideo(
+            coverImageName: "recommendation_moody_stage_alt_cover",
+            videoResourceName: "recommendation_moody_stage_alt_video",
+            likes: "68",
+            ownerName: "Elsa",
+            avatarImageName: "avatar_05"
+        )
+    ]
+
     private let songs = [
-        RecommendationSong(title: "Insula (Dirty Nano Remix)", artist: "-Annie", note: "More than 75% of people like it"),
-        RecommendationSong(title: "Insula (Dirty Nano Remix)", artist: "-Annie", note: "More than 75% of people like it"),
-        RecommendationSong(title: "Insula (Dirty Nano Remix)", artist: "-Annie", note: "More than 75% of people like it"),
-        RecommendationSong(title: "Insula (Dirty Nano Remix)", artist: "-Annie", note: "More than 75% of people like it")
+        RecommendationSong(
+            title: "Best Me 50 Feet Cover",
+            artist: "-Annie",
+            note: "From off-key to steady singing, every practice counts.",
+            avatarImageName: "avatar_01",
+            audioResourceName: "best_me_50_feet_cover"
+        ),
+        RecommendationSong(
+            title: "Flowers",
+            artist: "-Miley Cyrus",
+            note: "Sing out loud and sing all troubles away!",
+            avatarImageName: "avatar_02",
+            audioResourceName: "flowers_miley_cyrus"
+        ),
+        RecommendationSong(
+            title: "Lady Gaga Live",
+            artist: "-Lady Gaga",
+            note: "Once the melody plays, happy mode turns on instantly.",
+            avatarImageName: "avatar_03",
+            audioResourceName: "lady_gaga_live"
+        ),
+        RecommendationSong(
+            title: "Love Is Gone",
+            artist: "-Angela",
+            note: "Gather singing buddies and sing wildly all night long.",
+            avatarImageName: "avatar_04",
+            audioResourceName: "love_is_gone"
+        ),
+        RecommendationSong(
+            title: "Diamonds",
+            artist: "-Rihanna",
+            note: "Passion beats time; sing to your heart’s content right now.",
+            avatarImageName: "avatar_05",
+            audioResourceName: "diamonds_rihanna_chaoshan_cover"
+        ),
+        RecommendationSong(
+            title: "Can't Get You Out Of My Head",
+            artist: "-Kylie",
+            note: "Fire up the whole room with stunning high notes.",
+            avatarImageName: "avatar_06",
+            audioResourceName: "cant_get_you_out_of_my_head_live"
+        )
     ]
     private weak var publishCardView: PublishVideoCardView?
+    private weak var publishOverlayView: UIView?
+    private weak var dailyCardStackView: UIStackView?
+    private weak var listStackView: UIStackView?
     private var selectedPublishVideoURL: URL?
+    private let usesExternalTabBar: Bool
+    private let externalTabBarHeight: CGFloat = 80
+    private let externalTabBarBottomInset: CGFloat = 34
+    private let externalAddButtonTabBarSpacing: CGFloat = 15
+
+    init(usesExternalTabBar: Bool = false) {
+        self.usesExternalTabBar = usesExternalTabBar
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        self.usesExternalTabBar = false
+        super.init(coder: coder)
+    }
 
     override var prefersStatusBarHidden: Bool {
         true
@@ -33,6 +159,21 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(blockedUsersDidChange),
+            name: .blockedUsersDidChange,
+            object: nil
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadContent()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func setupViews() {
@@ -46,6 +187,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         configureImageButton(backButton, imageName: "back_button")
         backButton.accessibilityLabel = "Back"
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        backButton.isHidden = usesExternalTabBar
         view.addSubview(backButton)
 
         let contentScrollView = UIScrollView()
@@ -74,10 +216,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         cardStackView.alignment = .fill
         cardStackView.spacing = 17
         cardScrollView.addSubview(cardStackView)
-
-        (0..<3).forEach { _ in
-            cardStackView.addArrangedSubview(makeDailyCardView())
-        }
+        dailyCardStackView = cardStackView
 
         let styleTitleImageView = UIImageView(image: UIImage(named: "recommendation_style_title"))
         styleTitleImageView.contentMode = .scaleAspectFit
@@ -87,10 +226,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         listStackView.axis = .vertical
         listStackView.spacing = 12
         contentView.addSubview(listStackView)
-
-        songs.forEach { song in
-            listStackView.addArrangedSubview(makeSongCardView(song))
-        }
+        self.listStackView = listStackView
 
         let bottomBarView = UIView()
         bottomBarView.backgroundColor = .white
@@ -99,6 +235,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         bottomBarView.layer.shadowOpacity = 0.75
         bottomBarView.layer.shadowRadius = 0
         bottomBarView.layer.shadowOffset = CGSize(width: 5, height: 5)
+        bottomBarView.isHidden = usesExternalTabBar
         view.addSubview(bottomBarView)
 
         let bottomStackView = UIStackView()
@@ -123,7 +260,14 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         addButton.layer.cornerRadius = 33
         configureImageButton(addButton, imageName: "recommendation_add_button")
         addButton.addTarget(self, action: #selector(addTapped), for: .touchUpInside)
+        addButton.isHidden = usesExternalTabBar
         view.addSubview(addButton)
+
+        let externalAddButton = UIButton(type: .custom)
+        configureImageButton(externalAddButton, imageName: "recommendation_home_add_button")
+        externalAddButton.addTarget(self, action: #selector(addTapped), for: .touchUpInside)
+        externalAddButton.isHidden = !usesExternalTabBar
+        view.addSubview(externalAddButton)
 
         [
             backgroundImageView,
@@ -138,21 +282,14 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
             listStackView,
             bottomBarView,
             bottomStackView,
-            addButton
+            addButton,
+            externalAddButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         let preferredCardScrollHeightConstraint = cardScrollView.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.36)
         preferredCardScrollHeightConstraint.priority = .defaultHigh
         let minimumCardScrollHeightConstraint = cardScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 260)
         minimumCardScrollHeightConstraint.priority = .defaultHigh
-
-        cardStackView.arrangedSubviews.forEach { cardView in
-            cardView.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                cardView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.58),
-                cardView.heightAnchor.constraint(equalTo: cardView.widthAnchor, multiplier: 1.32)
-            ])
-        }
 
         bottomStackView.arrangedSubviews.forEach { button in
             button.translatesAutoresizingMaskIntoConstraints = false
@@ -184,7 +321,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
             contentView.bottomAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: contentScrollView.frameLayoutGuide.widthAnchor),
 
-            dailyTitleImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 70),
+            dailyTitleImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
             dailyTitleImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 19),
             dailyTitleImageView.widthAnchor.constraint(equalToConstant: 250),
             dailyTitleImageView.heightAnchor.constraint(equalToConstant: 37),
@@ -229,20 +366,80 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
             addButton.centerYAnchor.constraint(equalTo: bottomBarView.centerYAnchor),
             addButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
             addButton.widthAnchor.constraint(equalToConstant: 66),
-            addButton.heightAnchor.constraint(equalTo: addButton.widthAnchor)
+            addButton.heightAnchor.constraint(equalTo: addButton.widthAnchor),
+
+            externalAddButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
+            externalAddButton.bottomAnchor.constraint(
+                equalTo: view.bottomAnchor,
+                constant: -(externalTabBarBottomInset + externalTabBarHeight + externalAddButtonTabBarSpacing)
+            ),
+            externalAddButton.widthAnchor.constraint(equalToConstant: 68),
+            externalAddButton.heightAnchor.constraint(equalToConstant: 68)
         ])
 
+        reloadContent()
         view.bringSubviewToFront(backButton)
+        view.bringSubviewToFront(externalAddButton)
     }
 
-    private func makeDailyCardView() -> UIView {
+    private func reloadContent() {
+        reloadVideoCards()
+        reloadSongCards()
+    }
+
+    private func reloadVideoCards() {
+        guard let dailyCardStackView else { return }
+
+        dailyCardStackView.arrangedSubviews.forEach { cardView in
+            dailyCardStackView.removeArrangedSubview(cardView)
+            cardView.removeFromSuperview()
+        }
+
+        currentVideos().enumerated().forEach { index, video in
+            let cardView = makeDailyCardView(video, index: index)
+            dailyCardStackView.addArrangedSubview(cardView)
+            applyDailyCardConstraints(to: cardView)
+        }
+    }
+
+    private func reloadSongCards() {
+        guard let listStackView else { return }
+
+        listStackView.arrangedSubviews.forEach { cardView in
+            listStackView.removeArrangedSubview(cardView)
+            cardView.removeFromSuperview()
+        }
+
+        currentSongs().enumerated().forEach { index, song in
+            listStackView.addArrangedSubview(makeSongCardView(song, index: index))
+        }
+    }
+
+    private func applyDailyCardConstraints(to cardView: UIView) {
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            cardView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.58),
+            cardView.heightAnchor.constraint(equalTo: cardView.widthAnchor, multiplier: 1.32)
+        ])
+    }
+
+    private func currentVideos() -> [RecommendationVideo] {
+        videos.filter { !BlockedUserStore.shared.isBlocked(identifier: $0.blockedUser.identifier) }
+    }
+
+    private func currentSongs() -> [RecommendationSong] {
+        songs.filter { !BlockedUserStore.shared.isBlocked(identifier: $0.blockedUser.identifier) }
+    }
+
+    private func makeDailyCardView(_ video: RecommendationVideo, index: Int) -> UIView {
         let cardView = UIView()
         cardView.clipsToBounds = true
         cardView.layer.cornerRadius = 22
+        cardView.tag = index
         cardView.isUserInteractionEnabled = true
-        cardView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(videoCardTapped)))
+        cardView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(videoCardTapped(_:))))
 
-        let coverImageView = UIImageView(image: UIImage(named: "video_cover"))
+        let coverImageView = UIImageView(image: UIImage(named: video.coverImageName))
         coverImageView.contentMode = .scaleAspectFill
         cardView.addSubview(coverImageView)
 
@@ -251,7 +448,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         cardView.addSubview(likeImageView)
 
         let countLabel = UILabel()
-        countLabel.text = "99+"
+        countLabel.text = video.likes
         countLabel.textColor = .white
         countLabel.font = Self.countFont
         cardView.addSubview(countLabel)
@@ -287,20 +484,30 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         return cardView
     }
 
-    private func makeSongCardView(_ song: RecommendationSong) -> UIView {
+    private func makeSongCardView(_ song: RecommendationSong, index: Int) -> UIView {
         let cardView = UIView()
         cardView.isUserInteractionEnabled = true
-        cardView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(songCardTapped)))
+        cardView.tag = index
+        let cardTapGesture = UITapGestureRecognizer(target: self, action: #selector(songCardTapped(_:)))
+        cardTapGesture.delegate = self
+        cardView.addGestureRecognizer(cardTapGesture)
 
         let backgroundImageView = UIImageView(image: UIImage(named: "recommendation_list_card_background"))
         backgroundImageView.contentMode = .scaleToFill
         cardView.addSubview(backgroundImageView)
 
-        let albumImageView = UIImageView(image: UIImage(named: "record_disc"))
-        albumImageView.contentMode = .scaleAspectFill
-        albumImageView.clipsToBounds = true
-        albumImageView.layer.cornerRadius = 6
-        cardView.addSubview(albumImageView)
+        let albumButton = UIButton(type: .custom)
+        albumButton.setImage(UIImage(named: song.avatarImageName), for: .normal)
+        albumButton.imageView?.contentMode = .scaleAspectFill
+        albumButton.imageView?.clipsToBounds = true
+        albumButton.contentHorizontalAlignment = .fill
+        albumButton.contentVerticalAlignment = .fill
+        albumButton.clipsToBounds = true
+        albumButton.layer.cornerRadius = 27
+        albumButton.tag = index
+        albumButton.accessibilityLabel = "User profile"
+        albumButton.addTarget(self, action: #selector(songAvatarTapped(_:)), for: .touchUpInside)
+        cardView.addSubview(albumButton)
 
         let titleLabel = UILabel()
         titleLabel.text = song.title
@@ -322,6 +529,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
 
         let noteLabel = UILabel()
         noteLabel.text = song.note
+        noteLabel.numberOfLines = 2
         noteLabel.textColor = titleLabel.textColor
         noteLabel.font = Self.noteFont
         noteLabel.adjustsFontSizeToFitWidth = true
@@ -334,7 +542,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
 
         [
             backgroundImageView,
-            albumImageView,
+            albumButton,
             titleLabel,
             artistLabel,
             noteIconImageView,
@@ -343,20 +551,20 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
-            cardView.heightAnchor.constraint(equalToConstant: 78),
+            cardView.heightAnchor.constraint(equalToConstant: 88),
 
             backgroundImageView.topAnchor.constraint(equalTo: cardView.topAnchor),
             backgroundImageView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
             backgroundImageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
             backgroundImageView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
 
-            albumImageView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 11),
-            albumImageView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor, constant: -1),
-            albumImageView.widthAnchor.constraint(equalToConstant: 54),
-            albumImageView.heightAnchor.constraint(equalTo: albumImageView.widthAnchor),
+            albumButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 11),
+            albumButton.centerYAnchor.constraint(equalTo: cardView.centerYAnchor, constant: -1),
+            albumButton.widthAnchor.constraint(equalToConstant: 54),
+            albumButton.heightAnchor.constraint(equalTo: albumButton.widthAnchor),
 
-            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 13),
-            titleLabel.leadingAnchor.constraint(equalTo: albumImageView.trailingAnchor, constant: 12),
+            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 12),
+            titleLabel.leadingAnchor.constraint(equalTo: albumButton.trailingAnchor, constant: 12),
             titleLabel.trailingAnchor.constraint(equalTo: playImageView.leadingAnchor, constant: -16),
             titleLabel.heightAnchor.constraint(equalToConstant: 19),
 
@@ -366,14 +574,14 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
             artistLabel.heightAnchor.constraint(equalToConstant: 17),
 
             noteIconImageView.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            noteIconImageView.topAnchor.constraint(equalTo: artistLabel.bottomAnchor, constant: 2),
+            noteIconImageView.topAnchor.constraint(equalTo: artistLabel.bottomAnchor, constant: 5),
             noteIconImageView.widthAnchor.constraint(equalToConstant: 13),
             noteIconImageView.heightAnchor.constraint(equalTo: noteIconImageView.widthAnchor),
 
             noteLabel.leadingAnchor.constraint(equalTo: noteIconImageView.trailingAnchor, constant: 7),
-            noteLabel.centerYAnchor.constraint(equalTo: noteIconImageView.centerYAnchor),
+            noteLabel.topAnchor.constraint(equalTo: noteIconImageView.topAnchor, constant: -2),
             noteLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
-            noteLabel.heightAnchor.constraint(equalToConstant: 15),
+            noteLabel.heightAnchor.constraint(equalToConstant: 28),
 
             playImageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
             playImageView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
@@ -394,12 +602,67 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         navigationController?.popViewController(animated: true)
     }
 
-    @objc private func videoCardTapped() {
-        navigationController?.pushViewController(VideoPlayerViewController(coverImageName: "video_cover"), animated: true)
+    @objc private func videoCardTapped(_ sender: UITapGestureRecognizer) {
+        let videos = currentVideos()
+        guard
+            let cardView = sender.view,
+            videos.indices.contains(cardView.tag)
+        else {
+            return
+        }
+
+        navigationController?.pushViewController(
+            VideoPlayerViewController(
+                tracks: videoTracks(from: videos),
+                initialIndex: cardView.tag
+            ),
+            animated: true
+        )
     }
 
-    @objc private func songCardTapped() {
-        navigationController?.pushViewController(AudioPlayerViewController(), animated: true)
+    @objc private func songCardTapped(_ sender: UITapGestureRecognizer) {
+        let songs = currentSongs()
+        guard
+            let cardView = sender.view,
+            songs.indices.contains(cardView.tag)
+        else {
+            return
+        }
+
+        navigationController?.pushViewController(
+            AudioPlayerViewController(tracks: audioTracks(from: songs), initialIndex: cardView.tag),
+            animated: true
+        )
+    }
+
+    @objc private func songAvatarTapped(_ sender: UIButton) {
+        let songs = currentSongs()
+        guard songs.indices.contains(sender.tag) else { return }
+
+        let song = songs[sender.tag]
+        let displayName = displayArtistName(from: song.artist)
+        let profileViewController = UserProfileViewController(
+            displayName: displayName,
+            avatarImageName: song.avatarImageName,
+            featuredTrack: AudioPlayerTrack(
+                title: song.title,
+                artist: displayName,
+                audioURL: audioURL(for: song),
+                avatarImageName: song.avatarImageName
+            )
+        )
+        navigationController?.pushViewController(profileViewController, animated: true)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        var touchedView: UIView? = touch.view
+        while let view = touchedView {
+            if view is UIControl {
+                return false
+            }
+            touchedView = view.superview
+        }
+        return true
     }
 
     @objc private func messageTapped() {
@@ -411,7 +674,8 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
     }
 
     @objc private func addTapped() {
-        guard view.viewWithTag(52001) == nil else { return }
+        let hostView = publishOverlayHostView()
+        guard hostView.viewWithTag(52001) == nil else { return }
 
         let overlayView = UIView()
         overlayView.tag = 52001
@@ -419,7 +683,8 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         let endEditingTapGesture = UITapGestureRecognizer(target: self, action: #selector(endPublishEditing))
         endEditingTapGesture.cancelsTouchesInView = false
         overlayView.addGestureRecognizer(endEditingTapGesture)
-        view.addSubview(overlayView)
+        hostView.addSubview(overlayView)
+        publishOverlayView = overlayView
 
         let cardView = PublishVideoCardView()
         cardView.onClose = { [weak self] in
@@ -443,10 +708,10 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         preferredCardWidthConstraint.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
-            overlayView.topAnchor.constraint(equalTo: view.topAnchor),
-            overlayView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            overlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            overlayView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            overlayView.topAnchor.constraint(equalTo: hostView.topAnchor),
+            overlayView.leadingAnchor.constraint(equalTo: hostView.leadingAnchor),
+            overlayView.trailingAnchor.constraint(equalTo: hostView.trailingAnchor),
+            overlayView.bottomAnchor.constraint(equalTo: hostView.bottomAnchor),
 
             cardView.centerXAnchor.constraint(equalTo: overlayView.centerXAnchor),
             cardView.centerYAnchor.constraint(equalTo: overlayView.centerYAnchor, constant: 31),
@@ -460,15 +725,16 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
     @objc private func dismissPublishPopup() {
         publishCardView = nil
         selectedPublishVideoURL = nil
-        view.viewWithTag(52001)?.removeFromSuperview()
+        publishOverlayView?.removeFromSuperview()
+        publishOverlayView = nil
     }
 
     @objc private func endPublishEditing() {
-        view.endEditing(true)
+        publishOverlayView?.endEditing(true)
     }
 
     @objc private func choosePublishVideoTapped() {
-        view.endEditing(true)
+        publishOverlayView?.endEditing(true)
 
         var configuration = PHPickerConfiguration()
         configuration.filter = .videos
@@ -538,7 +804,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
     }
 
     private func publishVideo(_ values: PublishVideoCardView.FormValues) {
-        view.endEditing(true)
+        publishOverlayView?.endEditing(true)
 
         guard !values.releaseType.isEmpty else {
             showPublishAlert(message: "Please enter release type.")
@@ -571,6 +837,70 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
             completion?()
         })
         present(alert, animated: true)
+    }
+
+    private func publishOverlayHostView() -> UIView {
+        view.window ?? navigationController?.view ?? view
+    }
+
+    @objc private func blockedUsersDidChange() {
+        reloadContent()
+    }
+
+    private func audioURL(for song: RecommendationSong) -> URL? {
+        if let bundledURL = Bundle.main.url(forResource: song.audioResourceName, withExtension: "mp3", subdirectory: "Mp3")
+            ?? Bundle.main.url(forResource: song.audioResourceName, withExtension: "mp3") {
+            return bundledURL
+        }
+
+        guard let resourceURL = Bundle.main.resourceURL else { return nil }
+
+        let fileName = "\(song.audioResourceName).mp3"
+        return FileManager.default
+            .enumerator(at: resourceURL, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .first { $0.lastPathComponent == fileName }
+    }
+
+    private func videoURL(for video: RecommendationVideo) -> URL? {
+        if let bundledURL = Bundle.main.url(forResource: video.videoResourceName, withExtension: "mp4", subdirectory: "Mp3")
+            ?? Bundle.main.url(forResource: video.videoResourceName, withExtension: "mp4") {
+            return bundledURL
+        }
+
+        guard let resourceURL = Bundle.main.resourceURL else { return nil }
+
+        let fileName = "\(video.videoResourceName).mp4"
+        return FileManager.default
+            .enumerator(at: resourceURL, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .first { $0.lastPathComponent == fileName }
+    }
+
+    private func audioTracks(from songs: [RecommendationSong]) -> [AudioPlayerTrack] {
+        songs.map { song in
+            AudioPlayerTrack(
+                title: song.title,
+                artist: displayArtistName(from: song.artist),
+                audioURL: audioURL(for: song),
+                avatarImageName: song.avatarImageName
+            )
+        }
+    }
+
+    private func videoTracks(from videos: [RecommendationVideo]) -> [VideoPlayerTrack] {
+        videos.map { video in
+            VideoPlayerTrack(
+                videoURL: videoURL(for: video),
+                coverImageName: video.coverImageName,
+                ownerName: video.ownerName,
+                avatarImageName: video.avatarImageName
+            )
+        }
+    }
+
+    private func displayArtistName(from artist: String) -> String {
+        artist.trimmingCharacters(in: CharacterSet(charactersIn: "- "))
     }
 
     private static var countFont: UIFont {
