@@ -36,6 +36,9 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
     private let likeCountLabel = UILabel()
     private let dividerView = UIView()
     private let commentsStackView = UIStackView()
+    private let emptyCommentsContainerView = UIView()
+    private let emptyCommentsImageView = UIImageView(image: UIImage(named: "huaban-5102107231"))
+    private let emptyCommentsLabel = UILabel()
     private let inputContainerView = UIView()
     private let messageTextField = UITextField()
     private let sendButton = UIButton(type: .custom)
@@ -52,6 +55,8 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
 
     required init?(coder: NSCoder) {
         let fallbackItem = FriendsUpdateItem(
+            mediaKind: .audio,
+            title: "Soothe All Day",
             note: "Soothe all day’s tiredness\nwith a single song.",
             likes: "100W",
             name: "Anni",
@@ -59,7 +64,8 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
             detailText: "This is my first time sharing a joke, I ......",
             coverImageName: "friends_updates_cover_duet",
             avatarImageName: "avatar_07",
-            audioResourceName: "home_michael_buble_live"
+            audioResourceName: "home_michael_buble_live",
+            videoResourceName: nil
         )
         self.item = fallbackItem
         self.comments = []
@@ -167,6 +173,19 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
         commentsStackView.spacing = 14
         view.addSubview(commentsStackView)
 
+        emptyCommentsContainerView.isHidden = true
+        emptyCommentsContainerView.isUserInteractionEnabled = false
+        view.addSubview(emptyCommentsContainerView)
+
+        emptyCommentsImageView.contentMode = .scaleAspectFit
+        emptyCommentsContainerView.addSubview(emptyCommentsImageView)
+
+        emptyCommentsLabel.text = "No comments yet"
+        emptyCommentsLabel.textAlignment = .center
+        emptyCommentsLabel.textColor = Layout.textColor
+        emptyCommentsLabel.font = UIFont(name: "AvenirNext-HeavyItalic", size: 18) ?? .italicSystemFont(ofSize: 18)
+        emptyCommentsContainerView.addSubview(emptyCommentsLabel)
+
         inputContainerView.backgroundColor = Layout.accentPink.withAlphaComponent(0.78)
         inputContainerView.layer.cornerRadius = 22.5
         inputContainerView.layer.masksToBounds = true
@@ -215,6 +234,9 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
             likeCountLabel,
             dividerView,
             commentsStackView,
+            emptyCommentsContainerView,
+            emptyCommentsImageView,
+            emptyCommentsLabel,
             inputContainerView,
             messageTextField,
             sendButton
@@ -295,6 +317,22 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
             commentsStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
             commentsStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
 
+            emptyCommentsContainerView.topAnchor.constraint(equalTo: dividerView.bottomAnchor, constant: 28),
+            emptyCommentsContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyCommentsContainerView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.72),
+            emptyCommentsContainerView.bottomAnchor.constraint(lessThanOrEqualTo: inputContainerView.topAnchor, constant: -16),
+
+            emptyCommentsImageView.topAnchor.constraint(equalTo: emptyCommentsContainerView.topAnchor),
+            emptyCommentsImageView.centerXAnchor.constraint(equalTo: emptyCommentsContainerView.centerXAnchor),
+            emptyCommentsImageView.widthAnchor.constraint(equalToConstant: 132),
+            emptyCommentsImageView.heightAnchor.constraint(equalToConstant: 121),
+
+            emptyCommentsLabel.topAnchor.constraint(equalTo: emptyCommentsImageView.bottomAnchor, constant: 13),
+            emptyCommentsLabel.leadingAnchor.constraint(equalTo: emptyCommentsContainerView.leadingAnchor),
+            emptyCommentsLabel.trailingAnchor.constraint(equalTo: emptyCommentsContainerView.trailingAnchor),
+            emptyCommentsLabel.bottomAnchor.constraint(equalTo: emptyCommentsContainerView.bottomAnchor),
+            emptyCommentsLabel.heightAnchor.constraint(equalToConstant: 27),
+
             inputContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Layout.sideInset),
             inputContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Layout.sideInset),
             inputContainerView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -13),
@@ -333,6 +371,8 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
             }
             commentsStackView.addArrangedSubview(commentView)
         }
+
+        emptyCommentsContainerView.isHidden = !comments.isEmpty
     }
 
     private func loadPersistedComments() {
@@ -343,11 +383,11 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
     }
 
     private var userCommentsKey: String {
-        "skmusic.friendsUpdateDetail.userComments.\(item.audioResourceName)"
+        "skmusic.friendsUpdateDetail.userComments.\(item.storageResourceName)"
     }
 
     private var reportedCommentsKey: String {
-        "skmusic.friendsUpdateDetail.reportedComments.\(item.audioResourceName)"
+        "skmusic.friendsUpdateDetail.reportedComments.\(item.storageResourceName)"
     }
 
     private func loadUserComments() -> [FriendsUpdateComment] {
@@ -374,6 +414,8 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
 
     private static func defaultComments(for item: FriendsUpdateItem) -> [FriendsUpdateComment] {
         switch item.audioResourceName {
+        case "best_me_50_feet_cover", "flowers_miley_cyrus":
+            return []
         case "home_michael_buble_live":
             return [
                 defaultComment(item, idSuffix: "luna", name: "Luna", message: "Count me in for the duet part.", avatarImageName: "avatar_10"),
@@ -408,7 +450,7 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
         avatarImageName: String
     ) -> FriendsUpdateComment {
         FriendsUpdateComment(
-            id: "\(item.audioResourceName).\(idSuffix)",
+            id: "\(item.storageResourceName).\(idSuffix)",
             name: name,
             message: message,
             avatarImageName: avatarImageName,
@@ -434,7 +476,7 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
     }
 
     private func setupAudioPlayer() {
-        guard let audioURL = audioURL(forResource: item.audioResourceName) else { return }
+        guard let audioURL = FriendsUpdateData.audioURL(for: item) else { return }
 
         let asset = AVURLAsset(url: audioURL)
         let item = AVPlayerItem(asset: asset)
@@ -457,21 +499,6 @@ final class FriendsUpdateDetailViewController: UIViewController, UITextFieldDele
         }
 
         player.play()
-    }
-
-    private func audioURL(forResource resourceName: String) -> URL? {
-        if let bundledURL = Bundle.main.url(forResource: resourceName, withExtension: "mp3", subdirectory: "Mp3")
-            ?? Bundle.main.url(forResource: resourceName, withExtension: "mp3") {
-            return bundledURL
-        }
-
-        guard let resourceURL = Bundle.main.resourceURL else { return nil }
-
-        let fileName = "\(resourceName).mp3"
-        return FileManager.default
-            .enumerator(at: resourceURL, includingPropertiesForKeys: nil)?
-            .compactMap { $0 as? URL }
-            .first { $0.lastPathComponent == fileName }
     }
 
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {

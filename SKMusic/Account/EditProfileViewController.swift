@@ -26,6 +26,7 @@ final class EditProfileViewController: UIViewController, UITextFieldDelegate, PH
     private let nicknameLabelImageView = UIImageView(image: UIImage(named: "nickname_label"))
     private let nicknameTextField = UITextField()
     private let continueButton = UIButton(type: .custom)
+    private var selectedAvatarImage: UIImage?
 
     override var prefersStatusBarHidden: Bool {
         true
@@ -213,6 +214,7 @@ final class EditProfileViewController: UIViewController, UITextFieldDelegate, PH
             guard let image = object as? UIImage else { return }
 
             DispatchQueue.main.async {
+                self?.selectedAvatarImage = image
                 self?.avatarButton.setImage(image.withRenderingMode(.alwaysOriginal), for: .normal)
             }
         }
@@ -236,10 +238,31 @@ final class EditProfileViewController: UIViewController, UITextFieldDelegate, PH
 
     @objc private func continueTapped() {
         view.endEditing(true)
+        let nickname = nicknameTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        guard !nickname.isEmpty else {
+            showProfileFailedAlert()
+            return
+        }
+
+        AccountProfileStore.shared.saveCurrentProfile(
+            displayName: nickname,
+            avatarImage: selectedAvatarImage
+        )
         navigationController?.setViewControllers([MainTabBarController()], animated: true)
     }
 
     @objc private func dismissKeyboard() {
         view.endEditing(true)
+    }
+
+    private func showProfileFailedAlert() {
+        let alert = UIAlertController(
+            title: "Profile incomplete",
+            message: "Please enter your nickname.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }

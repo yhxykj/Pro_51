@@ -28,8 +28,8 @@ struct AudioPlayerTrack {
 
 final class AudioPlayerViewController: UIViewController {
     private let tracks: [AudioPlayerTrack]
+    private let treatsCurrentArtistAsFriend: Bool
     private var currentIndex: Int
-    private let friendState: FriendState
     private var player: AVPlayer?
     private var timeObserverToken: Any?
     private var itemEndObserver: NSObjectProtocol?
@@ -40,13 +40,10 @@ final class AudioPlayerViewController: UIViewController {
     private weak var elapsedTimeLabel: UILabel?
     private weak var totalTimeLabel: UILabel?
     private weak var playPauseButton: UIButton?
+    private weak var friendButton: UIButton?
     private weak var likeButton: UIButton?
+    private weak var likeCountLabel: UILabel?
     private weak var artistAvatarButton: UIButton?
-
-    private enum FriendState {
-        case add
-        case good
-    }
 
     override var prefersStatusBarHidden: Bool {
         true
@@ -56,8 +53,8 @@ final class AudioPlayerViewController: UIViewController {
         self.tracks = [
             AudioPlayerTrack(title: "Head Clouds", artist: "Annie", audioURL: audioURL)
         ]
+        self.treatsCurrentArtistAsFriend = isGoodFriend
         self.currentIndex = 0
-        self.friendState = isGoodFriend ? .good : .add
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -66,8 +63,8 @@ final class AudioPlayerViewController: UIViewController {
             ? [AudioPlayerTrack(title: "Head Clouds", artist: "Annie", audioURL: nil)]
             : tracks
         self.tracks = preparedTracks
+        self.treatsCurrentArtistAsFriend = isGoodFriend
         self.currentIndex = min(max(initialIndex, 0), preparedTracks.count - 1)
-        self.friendState = isGoodFriend ? .good : .add
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -75,8 +72,8 @@ final class AudioPlayerViewController: UIViewController {
         self.tracks = [
             AudioPlayerTrack(title: "Head Clouds", artist: "Annie", audioURL: nil)
         ]
+        self.treatsCurrentArtistAsFriend = false
         self.currentIndex = 0
-        self.friendState = .add
         super.init(coder: coder)
     }
 
@@ -168,8 +165,9 @@ final class AudioPlayerViewController: UIViewController {
 
         let likeCountLabel = UILabel()
         configureCountLabel(likeCountLabel)
-        likeCountLabel.text = "99+"
+        likeCountLabel.text = "0"
         view.addSubview(likeCountLabel)
+        self.likeCountLabel = likeCountLabel
 
         let progressSlider = UISlider()
         configureProgressSlider(progressSlider)
@@ -286,14 +284,13 @@ final class AudioPlayerViewController: UIViewController {
 
             artistNameLabel.topAnchor.constraint(equalTo: songTitleLabel.bottomAnchor, constant: 0),
             artistNameLabel.leadingAnchor.constraint(equalTo: songTitleLabel.leadingAnchor),
-            artistNameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 150),
+            artistNameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 142),
             artistNameLabel.heightAnchor.constraint(equalToConstant: 31),
 
             friendButton.centerYAnchor.constraint(equalTo: artistNameLabel.centerYAnchor),
             friendButton.leadingAnchor.constraint(equalTo: artistNameLabel.trailingAnchor, constant: 16),
             friendButton.trailingAnchor.constraint(lessThanOrEqualTo: likeButton.leadingAnchor, constant: -12),
-            friendButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 86),
-            friendButton.widthAnchor.constraint(lessThanOrEqualToConstant: 112),
+            friendButton.widthAnchor.constraint(equalToConstant: 112),
             friendButton.heightAnchor.constraint(equalToConstant: 22),
 
             likeButton.centerYAnchor.constraint(equalTo: artistNameLabel.centerYAnchor),
@@ -347,6 +344,7 @@ final class AudioPlayerViewController: UIViewController {
         songTitleLabel?.text = track.title
         artistNameLabel?.text = track.artist
         artistAvatarButton?.setImage(UIImage(named: track.avatarImageName), for: .normal)
+        updateFriendButton()
         updateLikeButton()
         resetProgress()
 
@@ -430,7 +428,6 @@ final class AudioPlayerViewController: UIViewController {
         guard let item = player?.currentItem else { return }
 
         refreshDuration(from: item)
-        let duration = seconds(from: item.duration)
         let currentSeconds = seconds(from: time)
         elapsedTimeLabel?.text = formatTime(currentSeconds)
 
@@ -464,14 +461,18 @@ final class AudioPlayerViewController: UIViewController {
         playPauseButton?.accessibilityLabel = isPlaying ? "Pause" : "Play"
     }
 
-    private func currentLikeStorageKey() -> String {
+    private func currentFavoriteItem() -> FavoriteItem {
         let track = tracks[currentIndex]
-        let identifier = track.audioURL?.lastPathComponent ?? "\(track.title)-\(track.artist)"
-        return "skmusic.audioPlayer.liked.\(identifier)"
+        return FavoriteItem.audio(
+            title: track.title,
+            artist: track.artist,
+            audioURL: track.audioURL,
+            avatarImageName: track.avatarImageName
+        )
     }
 
     private func isCurrentTrackLiked() -> Bool {
-        UserDefaults.standard.bool(forKey: currentLikeStorageKey())
+        FavoriteStore.shared.isFavorite(id: currentFavoriteItem().id)
     }
 
     private func updateLikeButton() {
@@ -479,20 +480,32 @@ final class AudioPlayerViewController: UIViewController {
         let imageName = isLiked ? "like_icon" : "unlike_icon"
         likeButton?.setImage(UIImage(named: imageName), for: .normal)
         likeButton?.accessibilityLabel = isLiked ? "Liked" : "Not Liked"
+        likeCountLabel?.text = isLiked ? "1" : "0"
+    }
+
+    private func isCurrentArtistFriend() -> Bool {
+        guard tracks.indices.contains(currentIndex) else { return false }
+        return treatsCurrentArtistAsFriend || FriendStore.shared.isFriend(name: tracks[currentIndex].artist)
+    }
+
+    private func updateFriendButton() {
+        let isFriend = isCurrentArtistFriend()
+        friendButton?.setTitle(isFriend ? "Good Friend" : "+ Add Friend", for: .normal)
+        friendButton?.setTitleColor(isFriend ? .white : UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1), for: .normal)
+        friendButton?.backgroundColor = isFriend
+            ? UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+            : UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
     }
 
     private func makeFriendButton() -> UIButton {
         let button = UIButton(type: .custom)
         button.layer.cornerRadius = 11
-        button.setTitle(friendState == .add ? "+ Add Friend" : "Good Friend", for: .normal)
-        button.setTitleColor(friendState == .add ? UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1) : .white, for: .normal)
-        button.backgroundColor = friendState == .add
-            ? UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
-            : UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
         button.titleLabel?.font = Self.friendButtonFont
         button.titleLabel?.adjustsFontSizeToFitWidth = true
         button.titleLabel?.minimumScaleFactor = 0.78
         button.addTarget(self, action: #selector(addFriendTapped), for: .touchUpInside)
+        friendButton = button
+        updateFriendButton()
         return button
     }
 
@@ -555,22 +568,14 @@ final class AudioPlayerViewController: UIViewController {
     }
 
     @objc private func likeTapped() {
-        let newValue = !isCurrentTrackLiked()
-        let key = currentLikeStorageKey()
-
-        if newValue {
-            UserDefaults.standard.set(true, forKey: key)
-        } else {
-            UserDefaults.standard.removeObject(forKey: key)
-        }
-
+        FavoriteStore.shared.toggle(currentFavoriteItem())
         updateLikeButton()
     }
 
     @objc private func addFriendTapped() {
-        let message = friendState == .add
-            ? "Friend request sent successfully."
-            : "You are already good friends."
+        let message = isCurrentArtistFriend()
+            ? "You are already good friends."
+            : "Friend request sent successfully."
         showNotice(message)
     }
 

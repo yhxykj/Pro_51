@@ -36,14 +36,13 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         let avatarImageName: String
         let age: String
         let gender: Gender
-        let friendCount: String
-        let likeCount: String
         let dynamicItems: [UserProfileDynamicItem]
     }
 
     private let tableView = UITableView()
     private let profileData: UserProfileData
     private var dynamicLikes: [Bool]
+    private weak var likeCountLabel: UILabel?
 
     override var prefersStatusBarHidden: Bool {
         true
@@ -56,7 +55,7 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             featuredTrack: featuredTrack
         )
         self.profileData = profileData
-        self.dynamicLikes = profileData.dynamicItems.indices.map { $0 < 2 }
+        self.dynamicLikes = Self.dynamicLikes(for: profileData)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -67,13 +66,28 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             featuredTrack: nil
         )
         self.profileData = profileData
-        self.dynamicLikes = profileData.dynamicItems.indices.map { $0 < 2 }
+        self.dynamicLikes = Self.dynamicLikes(for: profileData)
         super.init(coder: coder)
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(favoriteItemsDidChange),
+            name: .favoriteItemsDidChange,
+            object: nil
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadFavoriteState()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func setupViews() {
@@ -118,18 +132,20 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         ageLabel.font = Self.ageFont
         view.addSubview(ageLabel)
 
-        let friendCountLabel = makeStatLabel(profileData.friendCount)
+        let friendCountLabel = makeStatLabel(Self.actualFriendCountText())
         let friendTextLabel = makeStatLabel("friend")
-        let likeCountLabel = makeStatLabel(profileData.likeCount)
+        let likeCountLabel = makeStatLabel(likeCountText())
         let likeTextLabel = makeStatLabel("like")
+        self.likeCountLabel = likeCountLabel
         [friendCountLabel, friendTextLabel, likeCountLabel, likeTextLabel].forEach { view.addSubview($0) }
 
         let goodFriendButton = UIButton(type: .custom)
-        goodFriendButton.backgroundColor = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
         goodFriendButton.layer.cornerRadius = 16
-        goodFriendButton.setTitle("Good Friend", for: .normal)
-        goodFriendButton.setTitleColor(.white, for: .normal)
         goodFriendButton.titleLabel?.font = Self.goodFriendFont
+        goodFriendButton.titleLabel?.adjustsFontSizeToFitWidth = true
+        goodFriendButton.titleLabel?.minimumScaleFactor = 0.78
+        configureFriendStatusButton(goodFriendButton)
+        goodFriendButton.addTarget(self, action: #selector(friendStatusTapped), for: .touchUpInside)
         view.addSubview(goodFriendButton)
 
         let introImageView = UIImageView(image: UIImage(named: "user_profile_intro_text"))
@@ -285,12 +301,12 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             return UITableViewCell()
         }
 
-        let item = profileData.dynamicItems[indexPath.row]
+        let item = displayedDynamicItem(at: indexPath.row)
         cell.configure(item: item, isLiked: dynamicLikes[indexPath.row])
-        cell.onLikeTapped = { [weak self, weak tableView] in
+        cell.onLikeTapped = { [weak self] in
             guard let self else { return }
-            dynamicLikes[indexPath.row].toggle()
-            tableView?.reloadRows(at: [indexPath], with: .none)
+            guard indexPath.row < dynamicLikes.count else { return }
+            FavoriteStore.shared.toggle(favoriteItem(for: profileData.dynamicItems[indexPath.row]))
         }
         return cell
     }
@@ -306,7 +322,7 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             )
         }
         navigationController?.pushViewController(
-            AudioPlayerViewController(tracks: tracks, initialIndex: indexPath.row, isGoodFriend: true),
+            AudioPlayerViewController(tracks: tracks, initialIndex: indexPath.row, isGoodFriend: isProfileFriend()),
             animated: true
         )
     }
@@ -327,19 +343,95 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         button.adjustsImageWhenHighlighted = false
     }
 
+    private func displayedDynamicItem(at index: Int) -> UserProfileDynamicItem {
+        let item = profileData.dynamicItems[index]
+        let isLiked = index < dynamicLikes.count && dynamicLikes[index]
+        return UserProfileDynamicItem(
+            title: item.title,
+            artist: item.artist,
+            albumImageName: item.albumImageName,
+            likeCount: isLiked ? "1" : "0",
+            audioURL: item.audioURL
+        )
+    }
+
+    private func likeCountText() -> String {
+        "\(dynamicLikes.filter { $0 }.count)"
+    }
+
+    private func favoriteItem(for item: UserProfileDynamicItem) -> FavoriteItem {
+        FavoriteItem.audio(
+            title: item.title,
+            artist: profileData.displayName,
+            artworkImageName: item.albumImageName,
+            audioURL: item.audioURL,
+            avatarImageName: profileData.avatarImageName
+        )
+    }
+
+    private func reloadFavoriteState() {
+        dynamicLikes = Self.dynamicLikes(for: profileData)
+        likeCountLabel?.text = likeCountText()
+        tableView.reloadData()
+    }
+
+    private func isProfileFriend() -> Bool {
+        FriendStore.shared.isFriend(name: profileData.displayName)
+    }
+
+    private func configureFriendStatusButton(_ button: UIButton) {
+        let isFriend = isProfileFriend()
+        button.setTitle(isFriend ? "Good Friend" : "+ Add Friend", for: .normal)
+        button.setTitleColor(isFriend ? .white : UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1), for: .normal)
+        button.backgroundColor = isFriend
+            ? UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+            : UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
+    }
+
     @objc private func backTapped() {
         navigationController?.popViewController(animated: true)
     }
 
     @objc private func chatTapped() {
+        guard isProfileFriend() else {
+            showNonFriendChatPrompt()
+            return
+        }
+
         navigationController?.pushViewController(
-            FriendChatViewController(peerName: profileData.displayName),
+            FriendChatViewController(peerName: profileData.displayName, avatarImageName: profileData.avatarImageName),
             animated: true
         )
     }
 
     @objc private func callTapped() {
+        guard isProfileFriend() else {
+            showNonFriendChatPrompt()
+            return
+        }
+
         navigationController?.pushViewController(VideoCallViewController(), animated: true)
+    }
+
+    @objc private func friendStatusTapped() {
+        let message = isProfileFriend()
+            ? "You are already good friends."
+            : "Friend request sent successfully."
+        showNotice(message)
+    }
+
+    @objc private func favoriteItemsDidChange() {
+        reloadFavoriteState()
+    }
+
+    private func showNotice(_ message: String) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func showNonFriendChatPrompt() {
+        NonFriendChatPromptView.present(in: navigationController?.view ?? view)
     }
 
     private static func makeProfileData(
@@ -361,7 +453,7 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
                 title: featuredTrack.title,
                 artist: "-\(name)",
                 albumImageName: "record_disc",
-                likeCount: baseData.featuredLikeCount,
+                likeCount: "0",
                 audioURL: featuredTrack.audioURL
             )
             dynamicItems = [featuredItem] + dynamicItems.filter { $0.title != featuredItem.title }
@@ -372,30 +464,28 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             avatarImageName: profileAvatar,
             age: baseData.age,
             gender: profileGender,
-            friendCount: baseData.friendCount,
-            likeCount: baseData.likeCount,
             dynamicItems: dynamicItems
         )
     }
 
     private static func baseProfileData(
         for displayName: String
-    ) -> (age: String, gender: Gender, friendCount: String, likeCount: String, avatarImageName: String, featuredLikeCount: String) {
+    ) -> (age: String, gender: Gender, avatarImageName: String) {
         switch normalized(displayName) {
         case "annie":
-            return ("24", .male, "950", "999+", "avatar_01", "100w")
+            return ("24", .male, "avatar_01")
         case "miley cyrus":
-            return ("26", .male, "883", "768", "avatar_02", "96w")
+            return ("26", .male, "avatar_02")
         case "lady gaga":
-            return ("27", .female, "1K", "996", "avatar_03", "92w")
+            return ("27", .female, "avatar_03")
         case "angela":
-            return ("24", .female, "950", "999+", "avatar_04", "100w")
+            return ("24", .female, "avatar_04")
         case "rihanna":
-            return ("25", .female, "928", "887", "avatar_05", "88w")
+            return ("25", .female, "avatar_05")
         case "kylie":
-            return ("23", .female, "786", "689", "avatar_06", "82w")
+            return ("23", .female, "avatar_06")
         default:
-            return ("24", .female, "950", "999+", "message_avatar", "100w")
+            return ("24", .female, "message_avatar")
         }
     }
 
@@ -415,27 +505,27 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         switch normalized(displayName) {
         case "annie":
             return [
-                dynamicItem("Best Me 50 Feet Cover", artist: artist, likeCount: "100w", audioResourceName: "best_me_50_feet_cover")
+                dynamicItem("Best Me 50 Feet Cover", artist: artist, audioResourceName: "best_me_50_feet_cover")
             ]
         case "miley cyrus":
             return [
-                dynamicItem("Flowers", artist: artist, likeCount: "96w", audioResourceName: "flowers_miley_cyrus")
+                dynamicItem("Flowers", artist: artist, audioResourceName: "flowers_miley_cyrus")
             ]
         case "lady gaga":
             return [
-                dynamicItem("Lady Gaga Live", artist: artist, likeCount: "92w", audioResourceName: "lady_gaga_live")
+                dynamicItem("Lady Gaga Live", artist: artist, audioResourceName: "lady_gaga_live")
             ]
         case "angela":
             return [
-                dynamicItem("Love Is Gone", artist: artist, likeCount: "100w", audioResourceName: "love_is_gone")
+                dynamicItem("Love Is Gone", artist: artist, audioResourceName: "love_is_gone")
             ]
         case "rihanna":
             return [
-                dynamicItem("Diamonds", artist: artist, likeCount: "88w", audioResourceName: "diamonds_rihanna_chaoshan_cover")
+                dynamicItem("Diamonds", artist: artist, audioResourceName: "diamonds_rihanna_chaoshan_cover")
             ]
         case "kylie":
             return [
-                dynamicItem("Can't Get You Out Of My Head", artist: artist, likeCount: "82w", audioResourceName: "cant_get_you_out_of_my_head_live")
+                dynamicItem("Can't Get You Out Of My Head", artist: artist, audioResourceName: "cant_get_you_out_of_my_head_live")
             ]
         default:
             return []
@@ -445,16 +535,32 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
     private static func dynamicItem(
         _ title: String,
         artist: String,
-        likeCount: String,
         audioResourceName: String
     ) -> UserProfileDynamicItem {
         UserProfileDynamicItem(
             title: title,
             artist: artist,
             albumImageName: "record_disc",
-            likeCount: likeCount,
+            likeCount: "0",
             audioURL: audioURL(forResource: audioResourceName)
         )
+    }
+
+    private static func actualFriendCountText() -> String {
+        "0"
+    }
+
+    private static func dynamicLikes(for profileData: UserProfileData) -> [Bool] {
+        profileData.dynamicItems.map { item in
+            let favoriteItem = FavoriteItem.audio(
+                title: item.title,
+                artist: profileData.displayName,
+                artworkImageName: item.albumImageName,
+                audioURL: item.audioURL,
+                avatarImageName: profileData.avatarImageName
+            )
+            return FavoriteStore.shared.isFavorite(id: favoriteItem.id)
+        }
     }
 
     private static func audioURL(forResource resourceName: String) -> URL? {

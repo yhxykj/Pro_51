@@ -61,7 +61,7 @@ final class UserProfileDynamicTableViewCell: UITableViewCell {
                 title: "Insula (Dirty Nano Remix)",
                 artist: "-Annie",
                 albumImageName: "record_disc",
-                likeCount: "100w",
+                likeCount: "0",
                 audioURL: nil
             ),
             isLiked: isLiked

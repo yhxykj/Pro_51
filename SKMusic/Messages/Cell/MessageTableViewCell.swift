@@ -42,9 +42,10 @@ final class MessageTableViewCell: UITableViewCell {
         close(animated: false)
     }
 
-    func configure(title: String, subtitle: String) {
+    func configure(title: String, subtitle: String, avatarImageName: String) {
         titleLabel.text = title
         subtitleLabel.text = subtitle
+        avatarImageView.image = UIImage(named: avatarImageName) ?? UIImage(named: "message_avatar")
     }
 
     func close(animated: Bool) {

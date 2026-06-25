@@ -240,23 +240,27 @@ final class RegisterViewController: UIViewController, UITextFieldDelegate {
         let email = emailTextField.text ?? ""
         let password = passwordTextField.text ?? ""
 
-        guard AuthSession.canSignIn(email: email, password: password) else {
-            showSignUpFailedAlert()
-            return
+        switch AuthSession.register(email: email, password: password) {
+        case .success:
+            AuthSession.start(email: email)
+            navigationController?.pushViewController(EditProfileViewController(), animated: true)
+        case .invalidEmail:
+            showSignUpFailedAlert(message: "Please enter a valid email address.")
+        case .invalidPassword:
+            showSignUpFailedAlert(message: "Password must be at least 6 characters.")
+        case .emailAlreadyExists:
+            showSignUpFailedAlert(message: "This email already has an account. Please log in.")
         }
-
-        AuthSession.start(email: email)
-        navigationController?.pushViewController(EditProfileViewController(), animated: true)
     }
 
     @objc private func dismissKeyboard() {
         view.endEditing(true)
     }
 
-    private func showSignUpFailedAlert() {
+    private func showSignUpFailedAlert(message: String) {
         let alert = UIAlertController(
             title: "Sign up failed",
-            message: "Please use the test account music666@gmail.com with password 123456.",
+            message: message,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))

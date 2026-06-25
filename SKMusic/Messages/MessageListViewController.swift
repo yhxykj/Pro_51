@@ -17,10 +17,12 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         let title: String
         let subtitle: String
         let peerName: String
+        let avatarImageName: String
     }
 
     private struct FriendItem {
         let name: String
+        let avatarImageName: String
     }
 
     private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
@@ -28,11 +30,11 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
     private let friendHeaderButton = UIButton(type: .custom)
     private let selectedIndicatorView = UIView()
     private let tableView = UITableView()
-    private let messageItems: [MessageItem] = []
-    private let friendItems = [
-        FriendItem(name: "Angela"),
-        FriendItem(name: "Angela")
-    ]
+    private let emptyStateContainerView = UIView()
+    private let emptyStateImageView = UIImageView(image: UIImage(named: "huaban-5102107231"))
+    private let emptyStateLabel = UILabel()
+    private var messageItems: [MessageItem] = []
+    private var friendItems: [FriendItem] = []
 
     private var selectedHeader: HeaderSelection = .message
     private var selectedIndicatorCenterXConstraint: NSLayoutConstraint!
@@ -46,6 +48,24 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         super.viewDidLoad()
         setupViews()
         setupConstraints()
+        reloadFriendItems()
+        reloadMessageItems()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(chatConversationsDidChange),
+            name: .chatConversationsDidChange,
+            object: nil
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadFriendItems()
+        reloadMessageItems()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func setupViews() {
@@ -90,6 +110,18 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         tableView.register(MessageTableViewCell.self, forCellReuseIdentifier: MessageTableViewCell.reuseIdentifier)
         tableView.register(FriendTableViewCell.self, forCellReuseIdentifier: FriendTableViewCell.reuseIdentifier)
         view.addSubview(tableView)
+
+        emptyStateContainerView.isHidden = true
+        emptyStateContainerView.isUserInteractionEnabled = false
+        view.addSubview(emptyStateContainerView)
+
+        emptyStateImageView.contentMode = .scaleAspectFit
+        emptyStateContainerView.addSubview(emptyStateImageView)
+
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
+        emptyStateLabel.font = UIFont(name: "AvenirNext-HeavyItalic", size: 19) ?? .italicSystemFont(ofSize: 19)
+        emptyStateContainerView.addSubview(emptyStateLabel)
     }
 
     private func setupConstraints() {
@@ -98,7 +130,10 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
             messageHeaderButton,
             friendHeaderButton,
             selectedIndicatorView,
-            tableView
+            tableView,
+            emptyStateContainerView,
+            emptyStateImageView,
+            emptyStateLabel
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         selectedIndicatorCenterXConstraint = selectedIndicatorView.centerXAnchor.constraint(equalTo: messageHeaderButton.centerXAnchor)
@@ -127,7 +162,22 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
             tableView.topAnchor.constraint(equalTo: view.topAnchor, constant: 110),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            emptyStateContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyStateContainerView.topAnchor.constraint(equalTo: tableView.topAnchor, constant: 132),
+            emptyStateContainerView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.72),
+
+            emptyStateImageView.topAnchor.constraint(equalTo: emptyStateContainerView.topAnchor),
+            emptyStateImageView.centerXAnchor.constraint(equalTo: emptyStateContainerView.centerXAnchor),
+            emptyStateImageView.widthAnchor.constraint(equalToConstant: 156),
+            emptyStateImageView.heightAnchor.constraint(equalToConstant: 143),
+
+            emptyStateLabel.topAnchor.constraint(equalTo: emptyStateImageView.bottomAnchor, constant: 15),
+            emptyStateLabel.leadingAnchor.constraint(equalTo: emptyStateContainerView.leadingAnchor),
+            emptyStateLabel.trailingAnchor.constraint(equalTo: emptyStateContainerView.trailingAnchor),
+            emptyStateLabel.bottomAnchor.constraint(equalTo: emptyStateContainerView.bottomAnchor),
+            emptyStateLabel.heightAnchor.constraint(equalToConstant: 28)
         ])
     }
 
@@ -147,7 +197,11 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
                 return UITableViewCell()
             }
 
-            cell.configure(name: friendItems[indexPath.row].name)
+            let item = friendItems[indexPath.row]
+            cell.configure(name: item.name, avatarImageName: item.avatarImageName)
+            cell.onChatTapped = { [weak self] in
+                self?.openChat(peerName: item.name, avatarImageName: item.avatarImageName)
+            }
             return cell
         }
 
@@ -158,7 +212,7 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         }
 
         let item = messageItems[indexPath.row]
-        cell.configure(title: item.title, subtitle: item.subtitle)
+        cell.configure(title: item.title, subtitle: item.subtitle, avatarImageName: item.avatarImageName)
         cell.onWillOpen = { [weak self, weak cell] in
             guard let self, let cell else { return }
             if self.openCell !== cell {
@@ -186,10 +240,14 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
 
         let navigationController = navigationController ?? parent?.navigationController
         if selectedHeader == .friend {
-            navigationController?.pushViewController(UserProfileViewController(), animated: true)
+            let item = friendItems[indexPath.row]
+            navigationController?.pushViewController(
+                UserProfileViewController(displayName: item.name, avatarImageName: item.avatarImageName),
+                animated: true
+            )
         } else {
             let item = messageItems[indexPath.row]
-            navigationController?.pushViewController(FriendChatViewController(peerName: item.peerName), animated: true)
+            openChat(peerName: item.peerName, avatarImageName: item.avatarImageName)
         }
     }
 
@@ -211,6 +269,7 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         messageHeaderButton.isSelected = selection == .message
         friendHeaderButton.isSelected = selection == .friend
         tableView.reloadData()
+        updateEmptyState()
 
         let updates = {
             self.view.layoutIfNeeded()
@@ -235,6 +294,62 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
     private func closeOpenCell() {
         openCell?.close(animated: true)
         openCell = nil
+    }
+
+    private func reloadMessageItems() {
+        messageItems = ChatConversationStore.shared.allConversations().filter {
+            FriendStore.shared.isFriend(name: $0.peerName)
+        }.map {
+            MessageItem(
+                title: $0.peerName,
+                subtitle: $0.lastMessage,
+                peerName: $0.peerName,
+                avatarImageName: $0.avatarImageName ?? "message_avatar"
+            )
+        }
+        tableView.reloadData()
+        updateEmptyState()
+    }
+
+    private func openChat(peerName: String, avatarImageName: String) {
+        guard FriendStore.shared.isFriend(name: peerName) else {
+            showNonFriendChatPrompt()
+            reloadMessageItems()
+            return
+        }
+
+        let navigationController = navigationController ?? parent?.navigationController
+        navigationController?.pushViewController(
+            FriendChatViewController(peerName: peerName, avatarImageName: avatarImageName),
+            animated: true
+        )
+    }
+
+    private func showNonFriendChatPrompt() {
+        NonFriendChatPromptView.present(in: navigationController?.view ?? parent?.view ?? view)
+    }
+
+    private func reloadFriendItems() {
+        friendItems = FriendStore.shared.friends.map {
+            FriendItem(name: $0.name, avatarImageName: $0.avatarImageName)
+        }
+        tableView.reloadData()
+        updateEmptyState()
+    }
+
+    private func updateEmptyState() {
+        switch selectedHeader {
+        case .message:
+            emptyStateLabel.text = "No messages yet"
+            emptyStateContainerView.isHidden = !messageItems.isEmpty
+        case .friend:
+            emptyStateLabel.text = "No friends yet"
+            emptyStateContainerView.isHidden = !friendItems.isEmpty
+        }
+    }
+
+    @objc private func chatConversationsDidChange() {
+        reloadMessageItems()
     }
 
     private func configureHeaderButton(

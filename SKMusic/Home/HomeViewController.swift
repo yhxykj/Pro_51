@@ -13,28 +13,23 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         case audio
     }
 
-    private enum FriendState {
-        case add
-        case good
-    }
-
     private struct HomeMediaItem {
+        let title: String
         let kind: MediaKind
         let mediaImageName: String
-        let friendState: FriendState
         let videoResourceName: String?
         let blockedUser: BlockedUser
 
         init(
+            title: String,
             kind: MediaKind,
             mediaImageName: String,
-            friendState: FriendState,
             videoResourceName: String? = nil,
             blockedUser: BlockedUser = BlockedUser(identifier: "Annie", displayName: "Annie", avatarImageName: "avatar_01")
         ) {
+            self.title = title
             self.kind = kind
             self.mediaImageName = mediaImageName
-            self.friendState = friendState
             self.videoResourceName = videoResourceName
             self.blockedUser = blockedUser
         }
@@ -42,18 +37,20 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
 
     private let mediaItems = [
         HomeMediaItem(
+            title: "Live Crowd",
             kind: .video,
             mediaImageName: "recommendation_live_crowd_cover",
-            friendState: .add,
             videoResourceName: "recommendation_live_crowd_video"
         ),
-        HomeMediaItem(kind: .audio, mediaImageName: "record_disc", friendState: .add),
-        HomeMediaItem(kind: .audio, mediaImageName: "record_disc", friendState: .good)
+        HomeMediaItem(title: "Head Clouds", kind: .audio, mediaImageName: "record_disc"),
+        HomeMediaItem(title: "Head Clouds", kind: .audio, mediaImageName: "record_disc")
     ]
 
     private let mediaLayout = UICollectionViewFlowLayout()
     private lazy var mediaCollectionView = UICollectionView(frame: .zero, collectionViewLayout: mediaLayout)
     private let friendStateButton = UIButton(type: .custom)
+    private weak var likeButton: UIButton?
+    private weak var likeCountLabel: UILabel?
 
     private var currentIndex = 0
     private var videoMediaHeightConstraint: NSLayoutConstraint!
@@ -116,13 +113,16 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         view.addSubview(friendStateButton)
 
         let likeButton = UIButton(type: .custom)
-        configureImageButton(likeButton, imageName: "like_icon", accessibilityLabel: "Like")
+        configureImageButton(likeButton, imageName: "unlike_icon", accessibilityLabel: "Not Liked")
+        likeButton.addTarget(self, action: #selector(likeTapped), for: .touchUpInside)
         view.addSubview(likeButton)
+        self.likeButton = likeButton
 
         let likeCountLabel = UILabel()
         configureCountLabel(likeCountLabel)
-        likeCountLabel.text = "99+"
+        likeCountLabel.text = "0"
         view.addSubview(likeCountLabel)
+        self.likeCountLabel = likeCountLabel
 
         let progressSlider = UISlider()
         configureProgressSlider(progressSlider)
@@ -305,11 +305,18 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         switch item.kind {
         case .video:
             playerViewController = VideoPlayerViewController(
-                videoURL: videoURL(for: item),
-                coverImageName: item.mediaImageName
+                tracks: [
+                    VideoPlayerTrack(
+                        title: item.title,
+                        videoURL: videoURL(for: item),
+                        coverImageName: item.mediaImageName,
+                        ownerName: item.blockedUser.displayName,
+                        avatarImageName: item.blockedUser.avatarImageName
+                    )
+                ]
             )
         case .audio:
-            playerViewController = AudioPlayerViewController(isGoodFriend: item.friendState == .good)
+            playerViewController = AudioPlayerViewController(isGoodFriend: isFriend(item))
         }
 
         (navigationController ?? parent?.navigationController)?.pushViewController(playerViewController, animated: true)
@@ -346,7 +353,8 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         audioMediaHeightConstraint.isActive = isAudio
         reportVideoCenterYConstraint.isActive = !isAudio
         reportAudioTopConstraint.isActive = isAudio
-        updateFriendStateButton(item.friendState)
+        updateFriendStateButton(isFriend(item))
+        updateLikeState()
 
         let updates = {
             self.view.layoutIfNeeded()
@@ -401,6 +409,49 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         presentReportBlockPopup(in: hostView, blockedUser: mediaItems[currentIndex].blockedUser)
     }
 
+    @objc private func likeTapped() {
+        FavoriteStore.shared.toggle(favoriteItem(for: mediaItems[currentIndex]))
+        updateLikeState()
+    }
+
+    @objc private func friendStateTapped() {
+        let message = isFriend(mediaItems[currentIndex])
+            ? "You are already good friends."
+            : "Friend request sent successfully."
+        showNotice(message)
+    }
+
+    private func updateLikeState() {
+        let isFavorite = FavoriteStore.shared.isFavorite(id: favoriteItem(for: mediaItems[currentIndex]).id)
+        likeButton?.setImage(UIImage(named: isFavorite ? "like_icon" : "unlike_icon"), for: .normal)
+        likeButton?.accessibilityLabel = isFavorite ? "Liked" : "Not Liked"
+        likeCountLabel?.text = isFavorite ? "1" : "0"
+    }
+
+    private func favoriteItem(for item: HomeMediaItem) -> FavoriteItem {
+        switch item.kind {
+        case .audio:
+            return FavoriteItem.audio(
+                title: item.title,
+                artist: item.blockedUser.displayName,
+                audioURL: nil,
+                avatarImageName: item.blockedUser.avatarImageName
+            )
+        case .video:
+            return FavoriteItem.video(
+                title: item.title,
+                ownerName: item.blockedUser.displayName,
+                coverImageName: item.mediaImageName,
+                videoURL: videoURL(for: item),
+                avatarImageName: item.blockedUser.avatarImageName
+            )
+        }
+    }
+
+    private func isFriend(_ item: HomeMediaItem) -> Bool {
+        FriendStore.shared.isFriend(name: item.blockedUser.displayName)
+    }
+
     private func configureFriendStateButton() {
         friendStateButton.backgroundColor = UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
         friendStateButton.layer.cornerRadius = 11
@@ -409,14 +460,25 @@ final class HomeViewController: UIViewController, UICollectionViewDataSource, UI
         friendStateButton.titleLabel?.adjustsFontSizeToFitWidth = true
         friendStateButton.titleLabel?.minimumScaleFactor = 0.78
         friendStateButton.accessibilityLabel = "Friend State"
+        friendStateButton.addTarget(self, action: #selector(friendStateTapped), for: .touchUpInside)
     }
 
-    private func updateFriendStateButton(_ state: FriendState) {
-        let title = state == .add ? "+ Add Friend" : "Good Friend"
+    private func updateFriendStateButton(_ isFriend: Bool) {
+        let title = isFriend ? "Good Friend" : "+ Add Friend"
         friendStateButton.setTitle(title, for: .normal)
-        friendStateButton.backgroundColor = state == .add
-            ? UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
-            : UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+        friendStateButton.setTitleColor(
+            isFriend ? .white : UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1),
+            for: .normal
+        )
+        friendStateButton.backgroundColor = isFriend
+            ? UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+            : UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
+    }
+
+    private func showNotice(_ message: String) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     private func videoURL(for item: HomeMediaItem) -> URL? {

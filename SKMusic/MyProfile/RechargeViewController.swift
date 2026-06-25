@@ -8,14 +8,14 @@
 import StoreKit
 import UIKit
 
-final class RechargeViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+final class RechargeViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, SKPaymentTransactionObserver {
     private struct RechargePackage {
         let coins: Int
         let productID: String
         let fallbackPrice: String
 
         static let all: [RechargePackage] = [
-            RechargePackage(coins: 100, productID: "music.SKMusic.coins.100", fallbackPrice: "$ 9.9"),
+            RechargePackage(coins: 100, productID: "new_1000", fallbackPrice: "$ 9.9"),
             RechargePackage(coins: 200, productID: "music.SKMusic.coins.200", fallbackPrice: "$ 9.9"),
             RechargePackage(coins: 300, productID: "music.SKMusic.coins.300", fallbackPrice: "$ 9.9"),
             RechargePackage(coins: 400, productID: "music.SKMusic.coins.400", fallbackPrice: "$ 9.9"),
@@ -80,6 +80,13 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
         setupConstraints()
         updateBalance()
         listenForTransactionUpdates()
+        SKPaymentQueue.default().add(self)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(coinBalanceDidChange),
+            name: .coinBalanceDidChange,
+            object: nil
+        )
 
         Task { [weak self] in
             await self?.loadProducts()
@@ -88,6 +95,8 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
 
     deinit {
         transactionUpdatesTask?.cancel()
+        SKPaymentQueue.default().remove(self)
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func setupViews() {
@@ -120,8 +129,9 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
 
         balanceLabel.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
         balanceLabel.font = UIFont(name: "AvenirNext-HeavyItalic", size: 24) ?? .italicSystemFont(ofSize: 24)
+        balanceLabel.numberOfLines = 1
         balanceLabel.adjustsFontSizeToFitWidth = true
-        balanceLabel.minimumScaleFactor = 0.72
+        balanceLabel.minimumScaleFactor = 0.5
         headerView.addSubview(balanceLabel)
 
         headerCoinImageView.contentMode = .scaleAspectFit
@@ -187,12 +197,12 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
             titleImageView.heightAnchor.constraint(equalToConstant: 40),
 
             balanceLabel.topAnchor.constraint(equalTo: titleImageView.bottomAnchor, constant: 7),
-            balanceLabel.leadingAnchor.constraint(equalTo: titleImageView.leadingAnchor, constant: 4),
-            balanceLabel.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -54),
-            balanceLabel.heightAnchor.constraint(equalToConstant: 27),
+            balanceLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 143),
+            balanceLabel.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -14),
+            balanceLabel.heightAnchor.constraint(equalToConstant: 30),
 
             headerCoinImageView.topAnchor.constraint(equalTo: balanceLabel.bottomAnchor, constant: 13),
-            headerCoinImageView.centerXAnchor.constraint(equalTo: titleImageView.centerXAnchor, constant: -5),
+            headerCoinImageView.centerXAnchor.constraint(equalTo: balanceLabel.centerXAnchor),
             headerCoinImageView.widthAnchor.constraint(equalToConstant: 37),
             headerCoinImageView.heightAnchor.constraint(equalTo: headerCoinImageView.widthAnchor),
 
@@ -282,7 +292,33 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
         navigationController?.popViewController(animated: true)
     }
 
-    private func purchase(_ product: Product, at indexPath: IndexPath) {
+    @objc private func coinBalanceDidChange() {
+        updateBalance()
+    }
+
+    private func finishPurchasing() {
+        isPurchasing = false
+        purchasingIndexPath = nil
+        packagesCollectionView.isUserInteractionEnabled = true
+        reloadPackages()
+    }
+
+    private func product(for package: RechargePackage) async throws -> Product? {
+        if let product = productsByID[package.productID] {
+            return product
+        }
+
+        let products = try await Product.products(for: [package.productID])
+        guard let product = products.first(where: { $0.id == package.productID }) else {
+            return nil
+        }
+
+        productsByID[product.id] = product
+        reloadPackages()
+        return product
+    }
+
+    private func purchase(_ package: RechargePackage, at indexPath: IndexPath) {
         guard !isPurchasing else { return }
 
         isPurchasing = true
@@ -294,14 +330,20 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
 
         Task { [weak self] in
             guard let self else { return }
+            var shouldFinishPurchasing = true
             defer {
-                self.isPurchasing = false
-                self.purchasingIndexPath = nil
-                self.packagesCollectionView.isUserInteractionEnabled = true
-                self.reloadPackages()
+                if shouldFinishPurchasing {
+                    self.finishPurchasing()
+                }
             }
 
             do {
+                guard let product = try await self.product(for: package) else {
+                    shouldFinishPurchasing = false
+                    self.startLegacyPayment(for: package)
+                    return
+                }
+
                 let result = try await product.purchase()
                 switch result {
                 case .success(let verificationResult):
@@ -320,6 +362,62 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
                 self.showAlert(title: "Purchase failed", message: error.localizedDescription)
             }
         }
+    }
+
+    private func startLegacyPayment(for package: RechargePackage) {
+        guard SKPaymentQueue.canMakePayments() else {
+            finishPurchasing()
+            showAlert(title: "Purchase unavailable", message: "In-App Purchases are disabled on this device.")
+            return
+        }
+
+        let payment = SKMutablePayment()
+        payment.productIdentifier = package.productID
+        payment.quantity = 1
+        SKPaymentQueue.default().add(payment)
+    }
+
+    func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
+        transactions.forEach { transaction in
+            switch transaction.transactionState {
+            case .purchased:
+                deliverLegacy(transaction)
+                queue.finishTransaction(transaction)
+                finishPurchasing()
+                showAlert(title: "Purchase complete", message: "Coins have been added to your balance.")
+            case .failed:
+                queue.finishTransaction(transaction)
+                finishPurchasing()
+                if let error = transaction.error as? SKError, error.code == .paymentCancelled {
+                    return
+                }
+                showAlert(
+                    title: "Purchase failed",
+                    message: transaction.error?.localizedDescription ?? "The payment could not be completed."
+                )
+            case .deferred:
+                showAlert(title: "Purchase pending", message: "Your payment is pending approval.")
+            case .restored:
+                queue.finishTransaction(transaction)
+                finishPurchasing()
+            case .purchasing:
+                break
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func deliverLegacy(_ transaction: SKPaymentTransaction) {
+        guard
+            let package = RechargePackage.all.first(where: { $0.productID == transaction.payment.productIdentifier }),
+            let transactionIdentifier = transaction.transactionIdentifier
+        else {
+            return
+        }
+
+        CoinBalanceStore.credit(coins: package.coins, transactionIdentifier: transactionIdentifier)
+        updateBalance()
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
@@ -341,6 +439,7 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
 
         let package = RechargePackage.all[indexPath.item]
         cell.configure(
+            coins: package.coins,
             priceText: priceText(for: package),
             isLoading: indexPath == purchasingIndexPath
         )
@@ -351,12 +450,7 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
         guard RechargePackage.all.indices.contains(indexPath.item) else { return }
 
         let package = RechargePackage.all[indexPath.item]
-        guard let product = productsByID[package.productID] else {
-            showAlert(title: "Product unavailable", message: "Please configure \(package.productID) in App Store Connect.")
-            return
-        }
-
-        purchase(product, at: indexPath)
+        purchase(package, at: indexPath)
     }
 
     func collectionView(
@@ -402,6 +496,7 @@ private final class RechargePackageCollectionViewCell: UICollectionViewCell {
 
     private let cardView = UIView()
     private let coinImageView = UIImageView(image: UIImage(named: "recharge_coin_icon"))
+    private let coinCountLabel = UILabel()
     private let priceBackgroundView = UIView()
     private let priceLabel = UILabel()
     private let loadingOverlayView = UIView()
@@ -419,7 +514,8 @@ private final class RechargePackageCollectionViewCell: UICollectionViewCell {
         setupConstraints()
     }
 
-    func configure(priceText: String, isLoading: Bool) {
+    func configure(coins: Int, priceText: String, isLoading: Bool) {
+        coinCountLabel.text = "\(coins)"
         priceLabel.text = priceText
         setLoading(isLoading)
     }
@@ -445,6 +541,13 @@ private final class RechargePackageCollectionViewCell: UICollectionViewCell {
         coinImageView.contentMode = .scaleAspectFit
         cardView.addSubview(coinImageView)
 
+        coinCountLabel.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
+        coinCountLabel.textAlignment = .center
+        coinCountLabel.font = UIFont(name: "AvenirNext-HeavyItalic", size: 19) ?? .italicSystemFont(ofSize: 19)
+        coinCountLabel.adjustsFontSizeToFitWidth = true
+        coinCountLabel.minimumScaleFactor = 0.7
+        cardView.addSubview(coinCountLabel)
+
         priceBackgroundView.backgroundColor = UIColor(red: 0.94, green: 0.49, blue: 0.80, alpha: 1)
         cardView.addSubview(priceBackgroundView)
 
@@ -469,6 +572,7 @@ private final class RechargePackageCollectionViewCell: UICollectionViewCell {
         [
             cardView,
             coinImageView,
+            coinCountLabel,
             priceBackgroundView,
             priceLabel,
             loadingOverlayView,
@@ -490,6 +594,11 @@ private final class RechargePackageCollectionViewCell: UICollectionViewCell {
             coinImageView.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
             coinImageView.widthAnchor.constraint(equalTo: cardView.widthAnchor, multiplier: 0.58),
             coinImageView.heightAnchor.constraint(equalTo: coinImageView.widthAnchor),
+
+            coinCountLabel.topAnchor.constraint(equalTo: coinImageView.bottomAnchor, constant: 2),
+            coinCountLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 8),
+            coinCountLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -8),
+            coinCountLabel.bottomAnchor.constraint(lessThanOrEqualTo: priceBackgroundView.topAnchor, constant: -2),
 
             priceLabel.centerXAnchor.constraint(equalTo: priceBackgroundView.centerXAnchor),
             priceLabel.centerYAnchor.constraint(equalTo: priceBackgroundView.centerYAnchor),

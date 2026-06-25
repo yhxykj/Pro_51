@@ -25,22 +25,22 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
     }
 
     private struct RecommendationVideo {
+        let title: String
         let coverImageName: String
         let videoResourceName: String
-        let likes: String
         let ownerName: String
         let avatarImageName: String
 
         init(
+            title: String,
             coverImageName: String,
             videoResourceName: String,
-            likes: String,
             ownerName: String = "Annie",
             avatarImageName: String = "avatar_01"
         ) {
+            self.title = title
             self.coverImageName = coverImageName
             self.videoResourceName = videoResourceName
-            self.likes = likes
             self.ownerName = ownerName
             self.avatarImageName = avatarImageName
         }
@@ -52,37 +52,37 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
 
     private let videos = [
         RecommendationVideo(
+            title: "Live Crowd",
             coverImageName: "recommendation_live_crowd_cover",
             videoResourceName: "recommendation_live_crowd_video",
-            likes: "128",
             ownerName: "Annie",
             avatarImageName: "avatar_01"
         ),
         RecommendationVideo(
+            title: "Beach Dance",
             coverImageName: "recommendation_beach_dance_cover",
             videoResourceName: "recommendation_beach_dance_video",
-            likes: "99+",
             ownerName: "Bella",
             avatarImageName: "avatar_02"
         ),
         RecommendationVideo(
+            title: "Sunset Skate",
             coverImageName: "recommendation_sunset_skate_cover",
             videoResourceName: "recommendation_sunset_skate_video",
-            likes: "86",
             ownerName: "Chloe",
             avatarImageName: "avatar_03"
         ),
         RecommendationVideo(
+            title: "Moody Stage",
             coverImageName: "recommendation_moody_stage_cover",
             videoResourceName: "recommendation_moody_stage_video",
-            likes: "74",
             ownerName: "Daisy",
             avatarImageName: "avatar_04"
         ),
         RecommendationVideo(
+            title: "Moody Stage Alt",
             coverImageName: "recommendation_moody_stage_alt_cover",
             videoResourceName: "recommendation_moody_stage_alt_video",
-            likes: "68",
             ownerName: "Elsa",
             avatarImageName: "avatar_05"
         )
@@ -448,7 +448,7 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         cardView.addSubview(likeImageView)
 
         let countLabel = UILabel()
-        countLabel.text = video.likes
+        countLabel.text = favoriteCountText(for: video)
         countLabel.textColor = .white
         countLabel.font = Self.countFont
         cardView.addSubview(countLabel)
@@ -891,12 +891,24 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
     private func videoTracks(from videos: [RecommendationVideo]) -> [VideoPlayerTrack] {
         videos.map { video in
             VideoPlayerTrack(
+                title: video.title,
                 videoURL: videoURL(for: video),
                 coverImageName: video.coverImageName,
                 ownerName: video.ownerName,
                 avatarImageName: video.avatarImageName
             )
         }
+    }
+
+    private func favoriteCountText(for video: RecommendationVideo) -> String {
+        let item = FavoriteItem.video(
+            title: video.title,
+            ownerName: video.ownerName,
+            coverImageName: video.coverImageName,
+            videoURL: videoURL(for: video),
+            avatarImageName: video.avatarImageName
+        )
+        return FavoriteStore.shared.isFavorite(id: item.id) ? "1" : "0"
     }
 
     private func displayArtistName(from artist: String) -> String {

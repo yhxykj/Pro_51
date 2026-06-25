@@ -256,7 +256,7 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
     private func showSignInFailedAlert() {
         let alert = UIAlertController(
             title: "Login failed",
-            message: "Please use the test account music666@gmail.com with password 123456.",
+            message: "Please check your email and password, or create an account first.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))

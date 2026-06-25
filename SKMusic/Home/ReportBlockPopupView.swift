@@ -176,6 +176,20 @@ extension UIViewController {
         )
     }
 
+    func presentReportBlockPopupWithoutLeavingPage(in hostView: UIView? = nil, blockedUser: BlockedUser? = nil) {
+        guard let targetView = hostView ?? navigationController?.view ?? parent?.view ?? view else { return }
+
+        ReportBlockPopupView.present(
+            in: targetView,
+            onReport: { [weak self] in
+                self?.showReportReviewAlert()
+            },
+            onBlock: { [weak self] in
+                self?.blockUserWithoutLeavingPage(blockedUser)
+            }
+        )
+    }
+
     private func showReportReviewAlert() {
         let alert = UIAlertController(
             title: nil,
@@ -204,5 +218,13 @@ extension UIViewController {
         }
 
         dismiss(animated: true)
+    }
+
+    private func blockUserWithoutLeavingPage(_ user: BlockedUser?) {
+        view.endEditing(true)
+
+        if let user {
+            BlockedUserStore.shared.block(user)
+        }
     }
 }

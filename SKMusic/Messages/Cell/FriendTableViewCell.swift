@@ -10,9 +10,11 @@ import UIKit
 final class FriendTableViewCell: UITableViewCell {
     static let reuseIdentifier = "FriendTableViewCell"
 
+    var onChatTapped: (() -> Void)?
+
     private let avatarImageView = UIImageView(image: UIImage(named: "message_avatar"))
     private let nameLabel = UILabel()
-    private let chatImageView = UIImageView(image: UIImage(named: "tab_chat"))
+    private let chatButton = UIButton(type: .custom)
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -24,8 +26,14 @@ final class FriendTableViewCell: UITableViewCell {
         nil
     }
 
-    func configure(name: String) {
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        onChatTapped = nil
+    }
+
+    func configure(name: String, avatarImageName: String) {
         nameLabel.text = name
+        avatarImageView.image = UIImage(named: avatarImageName) ?? UIImage(named: "message_avatar")
     }
 
     private func setupViews() {
@@ -44,15 +52,18 @@ final class FriendTableViewCell: UITableViewCell {
         nameLabel.minimumScaleFactor = 0.8
         contentView.addSubview(nameLabel)
 
-        chatImageView.contentMode = .scaleAspectFit
-        contentView.addSubview(chatImageView)
+        chatButton.setImage(UIImage(named: "tab_chat"), for: .normal)
+        chatButton.imageView?.contentMode = .scaleAspectFit
+        chatButton.adjustsImageWhenHighlighted = false
+        chatButton.addTarget(self, action: #selector(chatTapped), for: .touchUpInside)
+        contentView.addSubview(chatButton)
     }
 
     private func setupConstraints() {
         [
             avatarImageView,
             nameLabel,
-            chatImageView
+            chatButton
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
@@ -63,14 +74,18 @@ final class FriendTableViewCell: UITableViewCell {
 
             nameLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 13),
             nameLabel.centerYAnchor.constraint(equalTo: avatarImageView.centerYAnchor),
-            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: chatImageView.leadingAnchor, constant: -18),
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: chatButton.leadingAnchor, constant: -18),
             nameLabel.heightAnchor.constraint(equalToConstant: 26),
 
-            chatImageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -23),
-            chatImageView.centerYAnchor.constraint(equalTo: avatarImageView.centerYAnchor, constant: 1),
-            chatImageView.widthAnchor.constraint(equalToConstant: 27),
-            chatImageView.heightAnchor.constraint(equalToConstant: 24)
+            chatButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -23),
+            chatButton.centerYAnchor.constraint(equalTo: avatarImageView.centerYAnchor, constant: 1),
+            chatButton.widthAnchor.constraint(equalToConstant: 27),
+            chatButton.heightAnchor.constraint(equalToConstant: 24)
         ])
+    }
+
+    @objc private func chatTapped() {
+        onChatTapped?()
     }
 
     private static var nameFont: UIFont {

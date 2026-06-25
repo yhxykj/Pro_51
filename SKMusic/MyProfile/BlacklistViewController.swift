@@ -23,6 +23,8 @@ final class BlacklistViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let stackView = UIStackView()
+    private let emptyStateContainerView = UIView()
+    private let emptyStateImageView = UIImageView(image: UIImage(named: "huaban-5102107231"))
     private let emptyLabel = UILabel()
 
     override var prefersStatusBarHidden: Bool {
@@ -69,11 +71,17 @@ final class BlacklistViewController: UIViewController {
         stackView.spacing = Layout.rowSpacing
         contentView.addSubview(stackView)
 
+        emptyStateContainerView.isUserInteractionEnabled = false
+        contentView.addSubview(emptyStateContainerView)
+
+        emptyStateImageView.contentMode = .scaleAspectFit
+        emptyStateContainerView.addSubview(emptyStateImageView)
+
         emptyLabel.text = "No blocked users"
         emptyLabel.textAlignment = .center
         emptyLabel.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
         emptyLabel.font = UIFont(name: "AvenirNext-HeavyItalic", size: 19) ?? .italicSystemFont(ofSize: 19)
-        contentView.addSubview(emptyLabel)
+        emptyStateContainerView.addSubview(emptyLabel)
     }
 
     private func setupConstraints() {
@@ -83,6 +91,8 @@ final class BlacklistViewController: UIViewController {
             scrollView,
             contentView,
             stackView,
+            emptyStateContainerView,
+            emptyStateImageView,
             emptyLabel
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
@@ -115,10 +125,21 @@ final class BlacklistViewController: UIViewController {
             stackView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             stackView.widthAnchor.constraint(lessThanOrEqualToConstant: Layout.rowMaximumWidth),
 
-            emptyLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 38),
-            emptyLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            emptyLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            emptyLabel.heightAnchor.constraint(equalToConstant: 32)
+            emptyStateContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 30),
+            emptyStateContainerView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            emptyStateContainerView.widthAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 0.72),
+            emptyStateContainerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+
+            emptyStateImageView.topAnchor.constraint(equalTo: emptyStateContainerView.topAnchor),
+            emptyStateImageView.centerXAnchor.constraint(equalTo: emptyStateContainerView.centerXAnchor),
+            emptyStateImageView.widthAnchor.constraint(equalToConstant: 156),
+            emptyStateImageView.heightAnchor.constraint(equalToConstant: 143),
+
+            emptyLabel.topAnchor.constraint(equalTo: emptyStateImageView.bottomAnchor, constant: 15),
+            emptyLabel.leadingAnchor.constraint(equalTo: emptyStateContainerView.leadingAnchor),
+            emptyLabel.trailingAnchor.constraint(equalTo: emptyStateContainerView.trailingAnchor),
+            emptyLabel.bottomAnchor.constraint(equalTo: emptyStateContainerView.bottomAnchor),
+            emptyLabel.heightAnchor.constraint(equalToConstant: 28)
         ])
     }
 
@@ -129,7 +150,7 @@ final class BlacklistViewController: UIViewController {
         }
 
         let users = BlockedUserStore.shared.allUsers()
-        emptyLabel.isHidden = !users.isEmpty
+        emptyStateContainerView.isHidden = !users.isEmpty
 
         users.forEach { user in
             stackView.addArrangedSubview(makeRowView(for: user))

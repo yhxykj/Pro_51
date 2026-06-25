@@ -9,12 +9,20 @@ import AVFoundation
 import UIKit
 
 struct VideoPlayerTrack {
+    let title: String
     let videoURL: URL?
     let coverImageName: String
     let ownerName: String
     let avatarImageName: String
 
-    init(videoURL: URL?, coverImageName: String, ownerName: String = "Annie", avatarImageName: String = "avatar_01") {
+    init(
+        title: String = "Live Crowd",
+        videoURL: URL?,
+        coverImageName: String,
+        ownerName: String = "Annie",
+        avatarImageName: String = "avatar_01"
+    ) {
+        self.title = title
         self.videoURL = videoURL
         self.coverImageName = coverImageName
         self.ownerName = ownerName
@@ -40,7 +48,9 @@ final class VideoPlayerViewController: UIViewController {
     private let elapsedTimeLabel = UILabel()
     private let totalTimeLabel = UILabel()
     private weak var ownerNameLabel: UILabel?
+    private weak var friendButton: UIButton?
     private weak var likeButton: UIButton?
+    private weak var likeCountLabel: UILabel?
     private var player: AVPlayer?
     private var timeObserverToken: Any?
     private var itemEndObserver: NSObjectProtocol?
@@ -152,6 +162,7 @@ final class VideoPlayerViewController: UIViewController {
         addFriendButton.titleLabel?.minimumScaleFactor = 0.78
         addFriendButton.addTarget(self, action: #selector(addFriendTapped), for: .touchUpInside)
         view.addSubview(addFriendButton)
+        self.friendButton = addFriendButton
 
         let likeButton = UIButton(type: .custom)
         configureImageButton(likeButton, imageName: "unlike_icon", accessibilityLabel: "Not Liked")
@@ -161,8 +172,9 @@ final class VideoPlayerViewController: UIViewController {
 
         let likeCountLabel = UILabel()
         configureCountLabel(likeCountLabel)
-        likeCountLabel.text = "99+"
+        likeCountLabel.text = "0"
         view.addSubview(likeCountLabel)
+        self.likeCountLabel = likeCountLabel
 
         configureProgressSlider(progressSlider)
         view.addSubview(progressSlider)
@@ -313,6 +325,7 @@ final class VideoPlayerViewController: UIViewController {
     private func configureCurrentTrack(autoplay: Bool) {
         coverImageView.image = UIImage(named: currentTrack.coverImageName)
         ownerNameLabel?.text = currentTrack.ownerName
+        updateFriendButton()
         resetProgress()
         removeTimeObserver()
         removeItemEndObserver()
@@ -578,13 +591,18 @@ final class VideoPlayerViewController: UIViewController {
         playPauseButton.accessibilityLabel = isPlaying ? "Pause" : "Play"
     }
 
-    private func likeStorageKey() -> String {
-        let identifier = currentTrack.videoURL?.lastPathComponent ?? currentTrack.coverImageName
-        return "skmusic.videoPlayer.liked.\(identifier)"
+    private func currentFavoriteItem() -> FavoriteItem {
+        FavoriteItem.video(
+            title: currentTrack.title,
+            ownerName: currentTrack.ownerName,
+            coverImageName: currentTrack.coverImageName,
+            videoURL: currentTrack.videoURL,
+            avatarImageName: currentTrack.avatarImageName
+        )
     }
 
     private func isLiked() -> Bool {
-        UserDefaults.standard.bool(forKey: likeStorageKey())
+        FavoriteStore.shared.isFavorite(id: currentFavoriteItem().id)
     }
 
     private func updateLikeButton() {
@@ -592,23 +610,19 @@ final class VideoPlayerViewController: UIViewController {
         let imageName = liked ? "like_icon" : "unlike_icon"
         likeButton?.setImage(UIImage(named: imageName), for: .normal)
         likeButton?.accessibilityLabel = liked ? "Liked" : "Not Liked"
+        likeCountLabel?.text = liked ? "1" : "0"
     }
 
     @objc private func likeTapped() {
-        let newValue = !isLiked()
-        let key = likeStorageKey()
-
-        if newValue {
-            UserDefaults.standard.set(true, forKey: key)
-        } else {
-            UserDefaults.standard.removeObject(forKey: key)
-        }
-
+        FavoriteStore.shared.toggle(currentFavoriteItem())
         updateLikeButton()
     }
 
     @objc private func addFriendTapped() {
-        showNotice("Friend request sent successfully.")
+        let message = isCurrentOwnerFriend()
+            ? "You are already good friends."
+            : "Friend request sent successfully."
+        showNotice(message)
     }
 
     @objc private func backTapped() {
@@ -632,6 +646,19 @@ final class VideoPlayerViewController: UIViewController {
         let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+
+    private func isCurrentOwnerFriend() -> Bool {
+        FriendStore.shared.isFriend(name: currentTrack.ownerName)
+    }
+
+    private func updateFriendButton() {
+        let isFriend = isCurrentOwnerFriend()
+        friendButton?.setTitle(isFriend ? "Good Friend" : "+ Add Friend", for: .normal)
+        friendButton?.setTitleColor(isFriend ? .white : UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1), for: .normal)
+        friendButton?.backgroundColor = isFriend
+            ? UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+            : UIColor(red: 249 / 255, green: 148 / 255, blue: 213 / 255, alpha: 1)
     }
 
     private static var friendButtonFont: UIFont {

@@ -7,7 +7,23 @@
 
 import UIKit
 
+enum FriendsUpdateMediaKind {
+    case audio
+    case video
+
+    var label: String {
+        switch self {
+        case .audio:
+            return "Audio"
+        case .video:
+            return "Video"
+        }
+    }
+}
+
 struct FriendsUpdateItem {
+    let mediaKind: FriendsUpdateMediaKind
+    let title: String
     let note: String
     let likes: String
     let name: String
@@ -15,10 +31,15 @@ struct FriendsUpdateItem {
     let detailText: String
     let coverImageName: String
     let avatarImageName: String
-    let audioResourceName: String
+    let audioResourceName: String?
+    let videoResourceName: String?
 
     var blockedUser: BlockedUser {
         BlockedUser(identifier: detailName, displayName: detailName, avatarImageName: avatarImageName)
+    }
+
+    var storageResourceName: String {
+        audioResourceName ?? videoResourceName ?? title
     }
 }
 
@@ -31,38 +52,7 @@ final class FriendsUpdatesViewController: UIViewController {
         static let cardSpacing: CGFloat = 19
     }
 
-    private let updates = [
-        FriendsUpdateItem(
-            note: "Looking for duet partners; let's record songs if our vibes match.",
-            likes: "88W",
-            name: "Mia",
-            detailName: "Mia",
-            detailText: "Looking for duet partners; let's record songs if our vibes match.",
-            coverImageName: "friends_updates_cover_duet",
-            avatarImageName: "avatar_07",
-            audioResourceName: "home_michael_buble_live"
-        ),
-        FriendsUpdateItem(
-            note: "Share your signature songs for community listening and comments.",
-            likes: "76W",
-            name: "Leo",
-            detailName: "Leo",
-            detailText: "Share your signature songs for community listening and comments.",
-            coverImageName: "friends_updates_cover_community",
-            avatarImageName: "avatar_08",
-            audioResourceName: "i_will_be_there"
-        ),
-        FriendsUpdateItem(
-            note: "Like-minded music lovers meet here through songs.",
-            likes: "92W",
-            name: "Nora",
-            detailName: "Nora",
-            detailText: "Like-minded music lovers meet here through songs.",
-            coverImageName: "friends_updates_cover_meetup",
-            avatarImageName: "avatar_09",
-            audioResourceName: "liangzi_feeling_supreme"
-        )
-    ]
+    private let updates = FriendsUpdateData.items
 
     private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
     private let scrollView = UIScrollView()
@@ -71,6 +61,9 @@ final class FriendsUpdatesViewController: UIViewController {
     private let bannerImageView = UIImageView(image: UIImage(named: "friends_updates_banner"))
     private let titleImageView = UIImageView(image: UIImage(named: "friends_updates_title"))
     private let cardsStackView = UIStackView()
+    private let emptyStateContainerView = UIView()
+    private let emptyStateImageView = UIImageView(image: UIImage(named: "huaban-5102107231"))
+    private let emptyStateLabel = UILabel()
 
     override var prefersStatusBarHidden: Bool {
         true
@@ -110,6 +103,8 @@ final class FriendsUpdatesViewController: UIViewController {
         scrollView.addSubview(contentView)
 
         bannerContainerView.backgroundColor = .clear
+        bannerContainerView.isUserInteractionEnabled = true
+        bannerContainerView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(bannerTapped)))
         contentView.addSubview(bannerContainerView)
 
         bannerImageView.contentMode = .scaleToFill
@@ -121,6 +116,19 @@ final class FriendsUpdatesViewController: UIViewController {
         cardsStackView.axis = .vertical
         cardsStackView.spacing = Layout.cardSpacing
         contentView.addSubview(cardsStackView)
+
+        emptyStateContainerView.isHidden = true
+        emptyStateContainerView.isUserInteractionEnabled = false
+        contentView.addSubview(emptyStateContainerView)
+
+        emptyStateImageView.contentMode = .scaleAspectFit
+        emptyStateContainerView.addSubview(emptyStateImageView)
+
+        emptyStateLabel.text = "No friend updates yet"
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.textColor = UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1)
+        emptyStateLabel.font = UIFont(name: "AvenirNext-HeavyItalic", size: 19) ?? .italicSystemFont(ofSize: 19)
+        emptyStateContainerView.addSubview(emptyStateLabel)
     }
 
     private func reloadCards() {
@@ -129,18 +137,21 @@ final class FriendsUpdatesViewController: UIViewController {
             view.removeFromSuperview()
         }
 
-        updates
+        let visibleUpdates = updates
             .filter { !BlockedUserStore.shared.isBlocked(identifier: $0.blockedUser.identifier) }
-            .forEach { item in
-                let cardView = FriendsUpdateCardView(item: item)
-                cardView.onTap = { [weak self] in
-                    self?.openDetail(for: item)
-                }
-                cardView.onReport = { [weak self] in
-                    self?.showReportBlockPopup(for: item)
-                }
-                cardsStackView.addArrangedSubview(cardView)
+
+        emptyStateContainerView.isHidden = !visibleUpdates.isEmpty
+
+        visibleUpdates.forEach { item in
+            let cardView = FriendsUpdateCardView(item: item)
+            cardView.onTap = { [weak self] in
+                self?.openDetail(for: item)
             }
+            cardView.onReport = { [weak self] in
+                self?.showReportBlockPopup(for: item)
+            }
+            cardsStackView.addArrangedSubview(cardView)
+        }
     }
 
     private func setupConstraints() {
@@ -151,7 +162,10 @@ final class FriendsUpdatesViewController: UIViewController {
             bannerContainerView,
             bannerImageView,
             titleImageView,
-            cardsStackView
+            cardsStackView,
+            emptyStateContainerView,
+            emptyStateImageView,
+            emptyStateLabel
         ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
@@ -190,13 +204,47 @@ final class FriendsUpdatesViewController: UIViewController {
             cardsStackView.topAnchor.constraint(equalTo: bannerContainerView.bottomAnchor, constant: 20),
             cardsStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Layout.horizontalInset),
             cardsStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Layout.horizontalInset),
-            cardsStackView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -144)
+            cardsStackView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -144),
+
+            emptyStateContainerView.topAnchor.constraint(equalTo: bannerContainerView.bottomAnchor, constant: 48),
+            emptyStateContainerView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            emptyStateContainerView.widthAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 0.72),
+            emptyStateContainerView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -144),
+
+            emptyStateImageView.topAnchor.constraint(equalTo: emptyStateContainerView.topAnchor),
+            emptyStateImageView.centerXAnchor.constraint(equalTo: emptyStateContainerView.centerXAnchor),
+            emptyStateImageView.widthAnchor.constraint(equalToConstant: 156),
+            emptyStateImageView.heightAnchor.constraint(equalToConstant: 143),
+
+            emptyStateLabel.topAnchor.constraint(equalTo: emptyStateImageView.bottomAnchor, constant: 15),
+            emptyStateLabel.leadingAnchor.constraint(equalTo: emptyStateContainerView.leadingAnchor),
+            emptyStateLabel.trailingAnchor.constraint(equalTo: emptyStateContainerView.trailingAnchor),
+            emptyStateLabel.bottomAnchor.constraint(equalTo: emptyStateContainerView.bottomAnchor),
+            emptyStateLabel.heightAnchor.constraint(equalToConstant: 28)
         ])
     }
 
     private func openDetail(for item: FriendsUpdateItem) {
-        let detailViewController = FriendsUpdateDetailViewController(item: item)
-        (navigationController ?? parent?.navigationController)?.pushViewController(detailViewController, animated: true)
+        let navigationController = navigationController ?? parent?.navigationController
+
+        switch item.mediaKind {
+        case .audio:
+            navigationController?.pushViewController(FriendsUpdateDetailViewController(item: item), animated: true)
+        case .video:
+            let track = VideoPlayerTrack(
+                title: item.title,
+                videoURL: FriendsUpdateData.videoURL(for: item),
+                coverImageName: item.coverImageName,
+                ownerName: item.detailName,
+                avatarImageName: item.avatarImageName
+            )
+            navigationController?.pushViewController(VideoPlayerViewController(tracks: [track]), animated: true)
+        }
+    }
+
+    @objc private func bannerTapped() {
+        let listViewController = FriendsUpdateListViewController(items: updates)
+        (navigationController ?? parent?.navigationController)?.pushViewController(listViewController, animated: true)
     }
 
     @objc private func blockedUsersDidChange() {
@@ -231,6 +279,8 @@ private final class FriendsUpdateCardView: UIView {
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupViews(item: FriendsUpdateItem(
+            mediaKind: .audio,
+            title: "Soothe All Day",
             note: "Soothe all day’s tiredness\nwith a single song.",
             likes: "100W",
             name: "Anni",
@@ -238,7 +288,8 @@ private final class FriendsUpdateCardView: UIView {
             detailText: "This is my first time sharing a joke, I ......",
             coverImageName: "friends_updates_cover_duet",
             avatarImageName: "avatar_07",
-            audioResourceName: "home_michael_buble_live"
+            audioResourceName: "home_michael_buble_live",
+            videoResourceName: nil
         ))
         setupConstraints()
     }

@@ -8,16 +8,54 @@
 import UIKit
 
 final class MyProfileViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+    private struct ProfileData {
+        let displayName: String
+        let avatarImageName: String
+        let avatarImage: UIImage?
+        let dynamicItems: [UserProfileDynamicItem]
+    }
+
     private let tableView = UITableView()
-    private var dynamicLikes = [true, true]
+    private let profileData: ProfileData
+    private var dynamicLikes: [Bool]
+    private weak var likeCountLabel: UILabel?
 
     override var prefersStatusBarHidden: Bool {
         true
     }
 
+    init() {
+        let profileData = MyProfileViewController.makeProfileData()
+        self.profileData = profileData
+        self.dynamicLikes = MyProfileViewController.dynamicLikes(for: profileData)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        let profileData = MyProfileViewController.makeProfileData()
+        self.profileData = profileData
+        self.dynamicLikes = MyProfileViewController.dynamicLikes(for: profileData)
+        super.init(coder: coder)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(favoriteItemsDidChange),
+            name: .favoriteItemsDidChange,
+            object: nil
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadFavoriteState()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func setupViews() {
@@ -38,20 +76,25 @@ final class MyProfileViewController: UIViewController, UITableViewDataSource, UI
         settingsButton.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
         view.addSubview(settingsButton)
 
-        let avatarImageView = UIImageView(image: UIImage(named: "message_avatar"))
+        let avatarImageView = UIImageView(image: profileData.avatarImage ?? UIImage(named: profileData.avatarImageName))
         avatarImageView.contentMode = .scaleAspectFill
         avatarImageView.clipsToBounds = true
         avatarImageView.layer.borderColor = UIColor.white.cgColor
         avatarImageView.layer.borderWidth = 6
         view.addSubview(avatarImageView)
 
-        let friendCountLabel = makeCenteredLabel("950", font: Self.statFont)
+        let friendCountLabel = makeCenteredLabel(Self.actualFriendCountText(), font: Self.statFont)
         let friendTextLabel = makeCenteredLabel("friend", font: Self.statFont)
-        let likeCountLabel = makeCenteredLabel("999+", font: Self.statFont)
+        let likeCountLabel = makeCenteredLabel(likeCountText(), font: Self.statFont)
         let likeTextLabel = makeCenteredLabel("like", font: Self.statFont)
+        self.likeCountLabel = likeCountLabel
+        [likeCountLabel, likeTextLabel].forEach { label in
+            label.isUserInteractionEnabled = true
+            label.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(likesTapped)))
+        }
         [friendCountLabel, friendTextLabel, likeCountLabel, likeTextLabel].forEach { view.addSubview($0) }
 
-        let nameLabel = makeCenteredLabel("Angela", font: Self.nameFont)
+        let nameLabel = makeCenteredLabel(profileData.displayName, font: Self.nameFont)
         view.addSubview(nameLabel)
 
         let introImageView = UIImageView(image: UIImage(named: "user_profile_intro_text"))
@@ -174,7 +217,7 @@ final class MyProfileViewController: UIViewController, UITableViewDataSource, UI
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        dynamicLikes.count
+        profileData.dynamicItems.count
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
@@ -193,18 +236,30 @@ final class MyProfileViewController: UIViewController, UITableViewDataSource, UI
 
         cell.layoutMargins = .zero
         cell.separatorInset = .zero
-        cell.configure(isLiked: dynamicLikes[indexPath.row])
-        cell.onLikeTapped = { [weak self, weak tableView] in
+        let item = displayedDynamicItem(at: indexPath.row)
+        cell.configure(item: item, isLiked: dynamicLikes[indexPath.row])
+        cell.onLikeTapped = { [weak self] in
             guard let self else { return }
-            dynamicLikes[indexPath.row].toggle()
-            tableView?.reloadRows(at: [indexPath], with: .none)
+            guard indexPath.row < dynamicLikes.count else { return }
+            FavoriteStore.shared.toggle(favoriteItem(for: profileData.dynamicItems[indexPath.row]))
         }
         return cell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: false)
-        navigationController?.pushViewController(AudioPlayerViewController(), animated: true)
+        let tracks = profileData.dynamicItems.map {
+            AudioPlayerTrack(
+                title: $0.title,
+                artist: profileData.displayName,
+                audioURL: $0.audioURL,
+                avatarImageName: profileData.avatarImageName
+            )
+        }
+        navigationController?.pushViewController(
+            AudioPlayerViewController(tracks: tracks, initialIndex: indexPath.row, isGoodFriend: true),
+            animated: true
+        )
     }
 
     private func makeCenteredLabel(_ text: String, font: UIFont) -> UILabel {
@@ -223,12 +278,106 @@ final class MyProfileViewController: UIViewController, UITableViewDataSource, UI
         button.imageView?.contentMode = .scaleAspectFit
     }
 
+    private func displayedDynamicItem(at index: Int) -> UserProfileDynamicItem {
+        let item = profileData.dynamicItems[index]
+        let isLiked = index < dynamicLikes.count && dynamicLikes[index]
+        return UserProfileDynamicItem(
+            title: item.title,
+            artist: item.artist,
+            albumImageName: item.albumImageName,
+            likeCount: isLiked ? "1" : "0",
+            audioURL: item.audioURL
+        )
+    }
+
+    private func likeCountText() -> String {
+        "\(FavoriteStore.shared.count)"
+    }
+
+    private func favoriteItem(for item: UserProfileDynamicItem) -> FavoriteItem {
+        FavoriteItem.audio(
+            title: item.title,
+            artist: profileData.displayName,
+            artworkImageName: item.albumImageName,
+            audioURL: item.audioURL,
+            avatarImageName: profileData.avatarImageName
+        )
+    }
+
+    private func reloadFavoriteState() {
+        dynamicLikes = Self.dynamicLikes(for: profileData)
+        likeCountLabel?.text = likeCountText()
+        tableView.reloadData()
+    }
+
     @objc private func settingsTapped() {
         navigationController?.pushViewController(SettingsViewController(), animated: true)
     }
 
     @objc private func getCoinsTapped() {
         navigationController?.pushViewController(RechargeViewController(), animated: true)
+    }
+
+    @objc private func likesTapped() {
+        navigationController?.pushViewController(FavoriteListViewController(), animated: true)
+    }
+
+    @objc private func favoriteItemsDidChange() {
+        reloadFavoriteState()
+    }
+
+    private static func makeProfileData() -> ProfileData {
+        let accountProfile = AccountProfileStore.shared.currentProfile()
+        return ProfileData(
+            displayName: accountProfile.displayName,
+            avatarImageName: accountProfile.avatarImageName,
+            avatarImage: accountProfile.avatarImage,
+            dynamicItems: AuthSession.isCurrentTestAccount ? testAccountDynamicItems() : []
+        )
+    }
+
+    private static func testAccountDynamicItems() -> [UserProfileDynamicItem] {
+        [
+            UserProfileDynamicItem(
+                title: "Feeling Supreme Livehouse",
+                artist: "-Music666",
+                albumImageName: "record_disc",
+                likeCount: "0",
+                audioURL: audioURL(forResource: "liangzi_feeling_supreme_livehouse")
+            )
+        ]
+    }
+
+    private static func actualFriendCountText() -> String {
+        "\(FriendStore.shared.count)"
+    }
+
+    private static func dynamicLikes(for profileData: ProfileData) -> [Bool] {
+        profileData.dynamicItems.map { item in
+            let favoriteItem = FavoriteItem.audio(
+                title: item.title,
+                artist: profileData.displayName,
+                artworkImageName: item.albumImageName,
+                audioURL: item.audioURL,
+                avatarImageName: profileData.avatarImageName
+            )
+            return FavoriteStore.shared.isFavorite(id: favoriteItem.id)
+        }
+    }
+
+    private static func audioURL(forResource resourceName: String) -> URL? {
+        if let bundledURL = Bundle.main.url(forResource: resourceName, withExtension: "mp3", subdirectory: "Mp3")
+            ?? Bundle.main.url(forResource: resourceName, withExtension: "mp3") {
+            return bundledURL
+        }
+
+        guard let resourceURL = Bundle.main.resourceURL else { return nil }
+
+        let fileName = "\(resourceName).mp3"
+        return FileManager.default
+            .enumerator(at: resourceURL, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .first { $0.lastPathComponent == fileName }
     }
 
     private static var nameFont: UIFont {

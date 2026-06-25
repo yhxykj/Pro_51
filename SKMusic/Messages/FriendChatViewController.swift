@@ -8,17 +8,10 @@
 import UIKit
 
 final class FriendChatViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UITextFieldDelegate {
-    private struct ChatMessage: Codable {
-        let text: String
-        let isIncoming: Bool
-    }
-
     private enum Layout {
         static let inputColor = UIColor(red: 249.0 / 255.0, green: 148.0 / 255.0, blue: 213.0 / 255.0, alpha: 1.0)
         static let placeholderColor = UIColor(red: 0.44, green: 0.35, blue: 0.43, alpha: 0.75)
     }
-
-    private static let storageKeyPrefix = "friend_chat_messages"
 
     private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
     private let backButton = UIButton(type: .custom)
@@ -28,29 +21,27 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
     private let messageTextField = UITextField()
     private let sendButton = UIButton(type: .custom)
     private let peerName: String
-    private let messagesStorageKey: String
-    private var chatMessages: [ChatMessage]
+    private let avatarImageName: String
+    private var chatMessages: [ChatMessageRecord]
     private var inputBottomConstraint: NSLayoutConstraint!
 
     override var prefersStatusBarHidden: Bool {
         true
     }
 
-    init(peerName: String = "Angela") {
-        let name = Self.normalizedPeerName(peerName)
-        let key = Self.messagesStorageKey(for: name)
+    init(peerName: String = "Angela", avatarImageName: String = "message_avatar") {
+        let name = ChatConversationStore.normalizedPeerName(peerName)
         self.peerName = name
-        self.messagesStorageKey = key
-        self.chatMessages = Self.loadMessages(forKey: key)
+        self.avatarImageName = avatarImageName
+        self.chatMessages = ChatConversationStore.shared.loadMessages(for: name)
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
-        let name = Self.normalizedPeerName("Angela")
-        let key = Self.messagesStorageKey(for: name)
+        let name = ChatConversationStore.normalizedPeerName("Angela")
         self.peerName = name
-        self.messagesStorageKey = key
-        self.chatMessages = Self.loadMessages(forKey: key)
+        self.avatarImageName = "message_avatar"
+        self.chatMessages = ChatConversationStore.shared.loadMessages(for: name)
         super.init(coder: coder)
     }
 
@@ -58,6 +49,7 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
         super.viewDidLoad()
         setupViews()
         setupConstraints()
+        updateChatAvailability()
     }
 
     private func setupViews() {
@@ -201,13 +193,18 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
     }
 
     @objc private func sendTapped() {
+        guard canChatWithPeer() else {
+            showNonFriendChatPrompt()
+            return
+        }
+
         let trimmedText = messageTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmedText.isEmpty else {
             messageTextField.resignFirstResponder()
             return
         }
 
-        chatMessages.append(ChatMessage(text: trimmedText, isIncoming: false))
+        chatMessages.append(ChatMessageRecord(text: trimmedText, isIncoming: false))
         saveMessages()
         let indexPath = IndexPath(row: chatMessages.count - 1, section: 0)
         chatTableView.insertRows(at: [indexPath], with: .automatic)
@@ -225,39 +222,33 @@ final class FriendChatViewController: UIViewController, UITableViewDataSource, U
     }
 
     private func saveMessages() {
-        guard let data = try? JSONEncoder().encode(chatMessages) else { return }
-        UserDefaults.standard.set(data, forKey: messagesStorageKey)
+        guard canChatWithPeer() else { return }
+
+        ChatConversationStore.shared.saveMessages(chatMessages, for: peerName, avatarImageName: avatarImageName)
     }
 
-    private static func loadMessages(forKey key: String) -> [ChatMessage] {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let messages = try? JSONDecoder().decode([ChatMessage].self, from: data) else {
-            return []
+    private func canChatWithPeer() -> Bool {
+        FriendStore.shared.isFriend(name: peerName)
+    }
+
+    private func updateChatAvailability() {
+        let canChat = canChatWithPeer()
+        messageTextField.isEnabled = canChat
+        sendButton.isEnabled = canChat
+        inputContainerView.alpha = canChat ? 1 : 0.55
+        if !canChat {
+            messageTextField.attributedPlaceholder = NSAttributedString(
+                string: "Only friends can chat",
+                attributes: [
+                    .foregroundColor: Layout.placeholderColor,
+                    .font: Self.placeholderFont
+                ]
+            )
         }
-        return messages
     }
 
-    private static func messagesStorageKey(for peerName: String) -> String {
-        let account = AuthSession.currentEmail ?? "guest"
-        return [
-            storageKeyPrefix,
-            storageSafeComponent(account),
-            storageSafeComponent(peerName)
-        ].joined(separator: "_")
-    }
-
-    private static func normalizedPeerName(_ peerName: String) -> String {
-        let trimmedName = peerName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedName.isEmpty ? "Angela" : trimmedName
-    }
-
-    private static func storageSafeComponent(_ text: String) -> String {
-        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let normalized = text.lowercased().unicodeScalars.map { scalar -> Character in
-            allowedCharacters.contains(scalar) ? Character(scalar) : "_"
-        }
-        let value = String(normalized).trimmingCharacters(in: CharacterSet(charactersIn: "_"))
-        return value.isEmpty ? "unknown" : value
+    private func showNonFriendChatPrompt() {
+        NonFriendChatPromptView.present(in: navigationController?.view ?? view)
     }
 
     private static var titleFont: UIFont {
