@@ -29,6 +29,17 @@ enum CoinBalanceStore {
     }
 
     @discardableResult
+    static func spend(coins: Int) -> Bool {
+        guard coins > 0 else { return false }
+
+        let currentBalance = balance
+        guard currentBalance >= coins else { return false }
+
+        setBalance(currentBalance - coins)
+        return true
+    }
+
+    @discardableResult
     static func credit(coins: Int, transactionID: UInt64) -> Bool {
         credit(coins: coins, transactionIdentifier: String(transactionID))
     }

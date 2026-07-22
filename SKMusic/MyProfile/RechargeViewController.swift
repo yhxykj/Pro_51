@@ -15,15 +15,15 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
         let fallbackPrice: String
 
         static let all: [RechargePackage] = [
-            RechargePackage(coins: 100, productID: "new_1000", fallbackPrice: "$ 9.9"),
-            RechargePackage(coins: 200, productID: "music.SKMusic.coins.200", fallbackPrice: "$ 9.9"),
-            RechargePackage(coins: 300, productID: "music.SKMusic.coins.300", fallbackPrice: "$ 9.9"),
-            RechargePackage(coins: 400, productID: "music.SKMusic.coins.400", fallbackPrice: "$ 9.9"),
-            RechargePackage(coins: 500, productID: "music.SKMusic.coins.500", fallbackPrice: "$ 9.9"),
-            RechargePackage(coins: 600, productID: "music.SKMusic.coins.600", fallbackPrice: "$ 9.9"),
-            RechargePackage(coins: 700, productID: "music.SKMusic.coins.700", fallbackPrice: "$ 9.9"),
-            RechargePackage(coins: 800, productID: "music.SKMusic.coins.800", fallbackPrice: "$ 9.9"),
-            RechargePackage(coins: 900, productID: "music.SKMusic.coins.900", fallbackPrice: "$ 9.9")
+            RechargePackage(coins: 3000, productID: "ygcomdlvptwhflro", fallbackPrice: "$99.99"),
+            RechargePackage(coins: 1500, productID: "zasbihejsnogkxly", fallbackPrice: "$49.99"),
+            RechargePackage(coins: 900, productID: "qijdfnjrbvfjbrgg", fallbackPrice: "$29.99"),
+            RechargePackage(coins: 600, productID: "nmwjanngssycidpq", fallbackPrice: "$19.99"),
+            RechargePackage(coins: 300, productID: "aucznsvpvdgvusuz", fallbackPrice: "$9.99"),
+            RechargePackage(coins: 210, productID: "unfjdfnuerhthjqe", fallbackPrice: "$6.99"),
+            RechargePackage(coins: 150, productID: "unofuejljtoidkfx", fallbackPrice: "$4.99"),
+            RechargePackage(coins: 60, productID: "fossbaipkptmxxyg", fallbackPrice: "$1.99"),
+            RechargePackage(coins: 30, productID: "naakzoeidwluinqr", fallbackPrice: "$0.99")
         ]
     }
 
@@ -492,6 +492,10 @@ private final class RechargePackageCollectionViewCell: UICollectionViewCell {
 
     private enum Layout {
         static let priceHeight: CGFloat = 34
+        static let coinIconTopOffset: CGFloat = 14
+        static let coinIconSize: CGFloat = 38
+        static let coinCountTopSpacing: CGFloat = 4
+        static let coinCountHeight: CGFloat = 24
     }
 
     private let cardView = UIView()
@@ -590,14 +594,15 @@ private final class RechargePackageCollectionViewCell: UICollectionViewCell {
             priceBackgroundView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
             priceBackgroundView.heightAnchor.constraint(equalToConstant: Layout.priceHeight),
 
-            coinImageView.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 19),
+            coinImageView.topAnchor.constraint(equalTo: cardView.topAnchor, constant: Layout.coinIconTopOffset),
             coinImageView.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
-            coinImageView.widthAnchor.constraint(equalTo: cardView.widthAnchor, multiplier: 0.58),
+            coinImageView.widthAnchor.constraint(equalToConstant: Layout.coinIconSize),
             coinImageView.heightAnchor.constraint(equalTo: coinImageView.widthAnchor),
 
-            coinCountLabel.topAnchor.constraint(equalTo: coinImageView.bottomAnchor, constant: 2),
+            coinCountLabel.topAnchor.constraint(equalTo: coinImageView.bottomAnchor, constant: Layout.coinCountTopSpacing),
             coinCountLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 8),
             coinCountLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -8),
+            coinCountLabel.heightAnchor.constraint(equalToConstant: Layout.coinCountHeight),
             coinCountLabel.bottomAnchor.constraint(lessThanOrEqualTo: priceBackgroundView.topAnchor, constant: -2),
 
             priceLabel.centerXAnchor.constraint(equalTo: priceBackgroundView.centerXAnchor),

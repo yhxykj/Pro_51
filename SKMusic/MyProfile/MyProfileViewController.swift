@@ -88,8 +88,14 @@ final class MyProfileViewController: UIViewController, UITableViewDataSource, UI
         let likeCountLabel = makeCenteredLabel(likeCountText(), font: Self.statFont)
         let likeTextLabel = makeCenteredLabel("like", font: Self.statFont)
         self.likeCountLabel = likeCountLabel
+        [friendCountLabel, friendTextLabel].forEach { label in
+            label.isUserInteractionEnabled = true
+            label.accessibilityTraits.insert(.button)
+            label.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(friendsTapped)))
+        }
         [likeCountLabel, likeTextLabel].forEach { label in
             label.isUserInteractionEnabled = true
+            label.accessibilityTraits.insert(.button)
             label.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(likesTapped)))
         }
         [friendCountLabel, friendTextLabel, likeCountLabel, likeTextLabel].forEach { view.addSubview($0) }
@@ -320,6 +326,10 @@ final class MyProfileViewController: UIViewController, UITableViewDataSource, UI
 
     @objc private func likesTapped() {
         navigationController?.pushViewController(FavoriteListViewController(), animated: true)
+    }
+
+    @objc private func friendsTapped() {
+        switchToMainMessageFriendList()
     }
 
     @objc private func favoriteItemsDidChange() {

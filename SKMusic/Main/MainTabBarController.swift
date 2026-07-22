@@ -42,6 +42,13 @@ final class MainTabBarController: UIViewController {
         showTab(at: 2)
     }
 
+    func showMessageFriendList() {
+        showTab(at: 2)
+
+        guard let messageListViewController = tabs[2].viewController as? MessageListViewController else { return }
+        messageListViewController.showFriendList()
+    }
+
     func showProfileTab() {
         showTab(at: 3)
     }
@@ -153,6 +160,32 @@ final class MainTabBarController: UIViewController {
 extension UIViewController {
     func switchToMainMessageTab() {
         switchToMainTab(at: 2)
+    }
+
+    func switchToMainMessageFriendList() {
+        if let mainTabBarController = self as? MainTabBarController {
+            mainTabBarController.showMessageFriendList()
+            return
+        }
+
+        var parentViewController = parent
+        while let currentParent = parentViewController {
+            if let mainTabBarController = currentParent as? MainTabBarController {
+                mainTabBarController.showMessageFriendList()
+                return
+            }
+            parentViewController = currentParent.parent
+        }
+
+        guard
+            let navigationController,
+            let mainTabBarController = navigationController.viewControllers.first(where: { $0 is MainTabBarController }) as? MainTabBarController
+        else {
+            return
+        }
+
+        mainTabBarController.showMessageFriendList()
+        navigationController.popToViewController(mainTabBarController, animated: true)
     }
 
     func switchToMainProfileTab() {

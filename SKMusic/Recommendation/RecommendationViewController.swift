@@ -11,6 +11,10 @@ import UIKit
 import UniformTypeIdentifiers
 
 final class RecommendationViewController: UIViewController, PHPickerViewControllerDelegate, UIGestureRecognizerDelegate {
+    private enum Publish {
+        static let coinCost = 19
+    }
+
     private struct RecommendationSong {
         let title: String
         let artist: String
@@ -822,11 +826,32 @@ final class RecommendationViewController: UIViewController, PHPickerViewControll
         }
 
         guard selectedPublishVideoURL != nil else {
-            showPublishAlert(message: "Please add MP4 audio first.")
+            showPublishAlert(message: "Please add MP4 video first.")
             return
         }
 
-        showPublishAlert(message: "Publish successful.") { [weak self] in
+        showPublishCostConfirmation()
+    }
+
+    private func showPublishCostConfirmation() {
+        guard let publishOverlayView else { return }
+
+        PublishCoinConfirmView.present(
+            in: publishOverlayView,
+            cost: Publish.coinCost,
+            balance: CoinBalanceStore.balance
+        ) { [weak self] in
+            self?.finishPublishAfterConfirmation()
+        }
+    }
+
+    private func finishPublishAfterConfirmation() {
+        guard CoinBalanceStore.spend(coins: Publish.coinCost) else {
+            showPublishAlert(message: "Not enough coins. Please get more coins first.")
+            return
+        }
+
+        showPublishAlert(message: "Publish successful. \(Publish.coinCost) coins spent.") { [weak self] in
             self?.dismissPublishPopup()
         }
     }

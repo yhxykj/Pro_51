@@ -44,6 +44,10 @@ final class MessageListViewController: UIViewController, UITableViewDataSource, 
         true
     }
 
+    func showFriendList(animated: Bool = false) {
+        setHeaderSelection(.friend, animated: animated)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()

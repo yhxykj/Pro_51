@@ -17,6 +17,10 @@ final class SettingsViewController: UIViewController {
         static let logoutBottomOffset: CGFloat = -14
     }
 
+    private enum Support {
+        static let email = "MusicTopvoks@gmail.com"
+    }
+
     private enum SettingItem: Int, CaseIterable {
         case blacklist
         case privacyAgreement
@@ -174,10 +178,16 @@ final class SettingsViewController: UIViewController {
         switch item {
         case .blacklist:
             navigationController?.pushViewController(BlacklistViewController(), animated: true)
+        case .privacyAgreement:
+            presentAppDocument(.privacyPolicy)
+        case .userAgreement:
+            presentAppDocument(.userAgreement)
+        case .communityGuidelines:
+            presentAppDocument(.communityGuidelines)
         case .deleteAccount:
             showDeleteAccountConfirmation()
-        default:
-            showPendingAlert(title: item.accessibilityLabel)
+        case .contactUs:
+            showContactEmail()
         }
     }
 
@@ -205,6 +215,19 @@ final class SettingsViewController: UIViewController {
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func showContactEmail() {
+        let alert = UIAlertController(
+            title: "Contact Us",
+            message: Support.email,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Copy Email", style: .default) { _ in
+            UIPasteboard.general.string = Support.email
+        })
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         present(alert, animated: true)
     }
 

@@ -45,7 +45,7 @@ final class PublishVideoCardView: UIView, UITextViewDelegate {
     }
 
     func resetSelection() {
-        uploadHintLabel.text = "Please add MP4 audio......."
+        uploadHintLabel.text = "Please add MP4 video......."
         uploadHintLabel.textColor = UIColor(red: 0.54, green: 0.54, blue: 0.55, alpha: 1)
         uploadPreviewImageView.image = nil
         uploadPreviewImageView.isHidden = true
@@ -99,7 +99,7 @@ final class PublishVideoCardView: UIView, UITextViewDelegate {
         uploadAddImageView.contentMode = .scaleAspectFit
         uploadView.addSubview(uploadAddImageView)
 
-        uploadHintLabel.text = "Please add MP4 audio......."
+        uploadHintLabel.text = "Please add MP4 video......."
         uploadHintLabel.textColor = UIColor(red: 0.54, green: 0.54, blue: 0.55, alpha: 1)
         uploadHintLabel.font = Self.publishHintFont
         addSubview(uploadHintLabel)

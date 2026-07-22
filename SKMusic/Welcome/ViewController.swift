@@ -186,11 +186,11 @@ class ViewController: UIViewController {
     }
 
     @objc private func userAgreementTapped() {
-        showAgreementContentPendingAlert(title: "User Agreement")
+        presentAppDocument(.userAgreement)
     }
 
     @objc private func privacyAgreementTapped() {
-        showAgreementContentPendingAlert(title: "Privacy Policy")
+        presentAppDocument(.privacyPolicy)
     }
 
     private func updateAgreementCheckButton() {
@@ -213,16 +213,6 @@ class ViewController: UIViewController {
         }
 
         return true
-    }
-
-    private func showAgreementContentPendingAlert(title: String) {
-        let alert = UIAlertController(
-            title: title,
-            message: "Agreement content is not configured yet.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
     }
 
 }
