@@ -7,11 +7,6 @@
 
 import UIKit
 
-/**
- 账号：music666@gmail.com
- 密码：123456
- */
-
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
