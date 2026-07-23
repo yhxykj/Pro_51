@@ -2,6 +2,35 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>LuvVibe</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>LuvVibe</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.musictop.hblok</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.musictop.hblok</string>
+			</array>
+		</dict>
+	</array>
+	<key>FacebookAppID</key>
+	<string>1354786969413507</string>
+	<key>FacebookClientToken</key>
+	<string>443f4a65d2210613f45429ce03e44ba5</string>
+	<key>FacebookDisplayName</key>
+	<string>LuvVibe</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

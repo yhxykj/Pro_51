@@ -23,6 +23,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = navigationController
         self.window = window
         window.makeKeyAndVisible()
+
+        TavoniFlowCenter.prime.ignite(in: windowScene)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

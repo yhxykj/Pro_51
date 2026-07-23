@@ -33,7 +33,7 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
         static let headerHeight: CGFloat = 176
         static let packageSpacing: CGFloat = 17
         static let packageLineSpacing: CGFloat = 19
-        static let packageAspectRatio: CGFloat = 220 / 184
+        static let packageAspectRatio: CGFloat = 250 / 184
     }
 
     private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
@@ -492,10 +492,10 @@ private final class RechargePackageCollectionViewCell: UICollectionViewCell {
 
     private enum Layout {
         static let priceHeight: CGFloat = 34
-        static let coinIconTopOffset: CGFloat = 14
-        static let coinIconSize: CGFloat = 38
-        static let coinCountTopSpacing: CGFloat = 4
-        static let coinCountHeight: CGFloat = 24
+        static let coinIconTopOffset: CGFloat = 10
+        static let coinIconSize: CGFloat = 30
+        static let coinCountTopSpacing: CGFloat = 5
+        static let coinCountHeight: CGFloat = 22
     }
 
     private let cardView = UIView()
