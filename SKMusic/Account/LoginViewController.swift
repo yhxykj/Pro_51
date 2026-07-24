@@ -18,6 +18,8 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
 
     private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
     private let whitePanelView = UIView()
+    private let formScrollView = UIScrollView()
+    private let formContentView = UIView()
     private let backButton = UIButton(type: .custom)
     private let brandTitleImageView = UIImageView(image: UIImage(named: "register_brand_title"))
     private let logInTitleImageView = UIImageView(image: UIImage(named: "login_title"))
@@ -27,6 +29,7 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
     private let passwordTextField = UITextField()
     private let createAccountButton = UIButton(type: .custom)
     private let continueButton = UIButton(type: .custom)
+    private weak var activeTextField: UITextField?
 
     override var prefersStatusBarHidden: Bool {
         true
@@ -37,6 +40,11 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
         setupViews()
         setupConstraints()
         setupKeyboardDismissal()
+        setupKeyboardObservers()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func setupViews() {
@@ -52,6 +60,12 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
         whitePanelView.layer.masksToBounds = true
         view.addSubview(whitePanelView)
 
+        formScrollView.showsVerticalScrollIndicator = false
+        formScrollView.alwaysBounceVertical = true
+        formScrollView.keyboardDismissMode = .interactive
+        whitePanelView.addSubview(formScrollView)
+        formScrollView.addSubview(formContentView)
+
         configureImageButton(backButton, imageName: "back_button", accessibilityLabel: "Back")
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         view.addSubview(backButton)
@@ -60,38 +74,40 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
         configureImageView(logInTitleImageView)
         configureImageView(emailLabelImageView)
         configureImageView(passwordLabelImageView)
-        whitePanelView.addSubview(brandTitleImageView)
-        whitePanelView.addSubview(logInTitleImageView)
-        whitePanelView.addSubview(emailLabelImageView)
-        whitePanelView.addSubview(passwordLabelImageView)
+        formContentView.addSubview(brandTitleImageView)
+        formContentView.addSubview(logInTitleImageView)
+        formContentView.addSubview(emailLabelImageView)
+        formContentView.addSubview(passwordLabelImageView)
 
         configureTextField(emailTextField, placeholder: "Please enter...")
         emailTextField.keyboardType = .emailAddress
         emailTextField.textContentType = .emailAddress
         emailTextField.returnKeyType = .next
         emailTextField.delegate = self
-        whitePanelView.addSubview(emailTextField)
+        formContentView.addSubview(emailTextField)
 
         configureTextField(passwordTextField, placeholder: "Please enter...")
         passwordTextField.isSecureTextEntry = true
         passwordTextField.textContentType = .password
         passwordTextField.returnKeyType = .done
         passwordTextField.delegate = self
-        whitePanelView.addSubview(passwordTextField)
+        formContentView.addSubview(passwordTextField)
 
         configureImageButton(createAccountButton, imageName: "create_account_signup_prompt", accessibilityLabel: "Don't have an account yet? Sign up")
         createAccountButton.addTarget(self, action: #selector(signUpTapped), for: .touchUpInside)
-        whitePanelView.addSubview(createAccountButton)
+        formContentView.addSubview(createAccountButton)
 
         configureImageButton(continueButton, imageName: "continue_button", accessibilityLabel: "Continue")
         continueButton.addTarget(self, action: #selector(continueTapped), for: .touchUpInside)
-        whitePanelView.addSubview(continueButton)
+        formContentView.addSubview(continueButton)
     }
 
     private func setupConstraints() {
         [
             backgroundImageView,
             whitePanelView,
+            formScrollView,
+            formContentView,
             backButton,
             brandTitleImageView,
             logInTitleImageView,
@@ -114,13 +130,25 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
             whitePanelView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             whitePanelView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
+            formScrollView.topAnchor.constraint(equalTo: whitePanelView.topAnchor),
+            formScrollView.leadingAnchor.constraint(equalTo: whitePanelView.leadingAnchor),
+            formScrollView.trailingAnchor.constraint(equalTo: whitePanelView.trailingAnchor),
+            formScrollView.bottomAnchor.constraint(equalTo: whitePanelView.bottomAnchor),
+
+            formContentView.topAnchor.constraint(equalTo: formScrollView.contentLayoutGuide.topAnchor),
+            formContentView.leadingAnchor.constraint(equalTo: formScrollView.contentLayoutGuide.leadingAnchor),
+            formContentView.trailingAnchor.constraint(equalTo: formScrollView.contentLayoutGuide.trailingAnchor),
+            formContentView.bottomAnchor.constraint(equalTo: formScrollView.contentLayoutGuide.bottomAnchor),
+            formContentView.widthAnchor.constraint(equalTo: formScrollView.frameLayoutGuide.widthAnchor),
+            formContentView.heightAnchor.constraint(greaterThanOrEqualTo: formScrollView.frameLayoutGuide.heightAnchor),
+
             backButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 45),
             backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
             backButton.widthAnchor.constraint(equalToConstant: 69),
             backButton.heightAnchor.constraint(equalToConstant: 29),
 
-            brandTitleImageView.topAnchor.constraint(equalTo: whitePanelView.topAnchor, constant: 25),
-            brandTitleImageView.leadingAnchor.constraint(equalTo: whitePanelView.leadingAnchor, constant: Layout.horizontalInset),
+            brandTitleImageView.topAnchor.constraint(equalTo: formContentView.topAnchor, constant: 25),
+            brandTitleImageView.leadingAnchor.constraint(equalTo: formContentView.leadingAnchor, constant: Layout.horizontalInset),
             brandTitleImageView.widthAnchor.constraint(equalToConstant: 222),
             brandTitleImageView.heightAnchor.constraint(equalToConstant: 37),
 
@@ -135,8 +163,8 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
             emailLabelImageView.heightAnchor.constraint(equalToConstant: 33),
 
             emailTextField.topAnchor.constraint(equalTo: emailLabelImageView.bottomAnchor, constant: 11),
-            emailTextField.leadingAnchor.constraint(equalTo: whitePanelView.leadingAnchor, constant: Layout.horizontalInset),
-            emailTextField.trailingAnchor.constraint(equalTo: whitePanelView.trailingAnchor, constant: -Layout.horizontalInset),
+            emailTextField.leadingAnchor.constraint(equalTo: formContentView.leadingAnchor, constant: Layout.horizontalInset),
+            emailTextField.trailingAnchor.constraint(equalTo: formContentView.trailingAnchor, constant: -Layout.horizontalInset),
             emailTextField.heightAnchor.constraint(equalToConstant: 47),
 
             passwordLabelImageView.topAnchor.constraint(equalTo: emailTextField.bottomAnchor, constant: 19),
@@ -150,15 +178,15 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
             passwordTextField.heightAnchor.constraint(equalTo: emailTextField.heightAnchor),
 
             createAccountButton.topAnchor.constraint(equalTo: passwordTextField.bottomAnchor, constant: 43),
-            createAccountButton.centerXAnchor.constraint(equalTo: whitePanelView.centerXAnchor),
+            createAccountButton.centerXAnchor.constraint(equalTo: formContentView.centerXAnchor),
             createAccountButton.widthAnchor.constraint(equalToConstant: 304),
             createAccountButton.heightAnchor.constraint(equalToConstant: 24),
 
-            continueButton.topAnchor.constraint(equalTo: createAccountButton.bottomAnchor, constant: 120),
+            continueButton.topAnchor.constraint(equalTo: createAccountButton.bottomAnchor, constant: 52),
             continueButton.leadingAnchor.constraint(equalTo: emailTextField.leadingAnchor),
             continueButton.trailingAnchor.constraint(equalTo: emailTextField.trailingAnchor),
             continueButton.heightAnchor.constraint(equalToConstant: 64),
-            continueButton.bottomAnchor.constraint(lessThanOrEqualTo: whitePanelView.safeAreaLayoutGuide.bottomAnchor, constant: -36)
+            formContentView.bottomAnchor.constraint(greaterThanOrEqualTo: continueButton.bottomAnchor, constant: 36)
         ])
     }
 
@@ -217,6 +245,65 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
         view.addGestureRecognizer(tapGesture)
     }
 
+    private func setupKeyboardObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillChangeFrame(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+
+    private func updateKeyboardInset(from notification: Notification, isHiding: Bool) {
+        let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval ?? 0.25
+        let curveRaw = notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
+        let options = UIView.AnimationOptions(rawValue: curveRaw << 16)
+
+        var bottomInset: CGFloat = 0
+        if isHiding == false,
+           let keyboardValue = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue {
+            let keyboardFrame = view.convert(keyboardValue.cgRectValue, from: nil)
+            let scrollFrame = formScrollView.convert(formScrollView.bounds, to: view)
+            bottomInset = max(0, scrollFrame.maxY - keyboardFrame.minY) + 20
+        }
+
+        UIView.animate(withDuration: duration, delay: 0, options: options) {
+            self.formScrollView.contentInset.bottom = bottomInset
+            self.formScrollView.scrollIndicatorInsets.bottom = bottomInset
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            if isHiding == false {
+                self.scrollActiveTextFieldIntoView()
+            }
+        }
+    }
+
+    private func scrollActiveTextFieldIntoView() {
+        guard let activeTextField else { return }
+        let targetRect = activeTextField.convert(
+            activeTextField.bounds.insetBy(dx: 0, dy: -18),
+            to: formScrollView
+        )
+        formScrollView.scrollRectToVisible(targetRect, animated: true)
+    }
+
+    func textFieldDidBeginEditing(_ textField: UITextField) {
+        activeTextField = textField
+        scrollActiveTextFieldIntoView()
+    }
+
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        if activeTextField === textField {
+            activeTextField = nil
+        }
+    }
+
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         if textField === emailTextField {
             passwordTextField.becomeFirstResponder()
@@ -251,6 +338,14 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
 
     @objc private func dismissKeyboard() {
         view.endEditing(true)
+    }
+
+    @objc private func keyboardWillChangeFrame(_ notification: Notification) {
+        updateKeyboardInset(from: notification, isHiding: false)
+    }
+
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        updateKeyboardInset(from: notification, isHiding: true)
     }
 
     private func showSignInFailedAlert() {

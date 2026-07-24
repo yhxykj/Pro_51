@@ -65,6 +65,8 @@ final class SettingsViewController: UIViewController {
     }
 
     private let backgroundImageView = UIImageView(image: UIImage(named: "welcome_background"))
+    private let scrollView = UIScrollView()
+    private let contentView = UIView()
     private let backButton = UIButton(type: .custom)
     private let itemButtons = SettingItem.allCases.map { _ in UIButton(type: .custom) }
     private let logoutButton = UIButton(type: .custom)
@@ -85,6 +87,11 @@ final class SettingsViewController: UIViewController {
         backgroundImageView.contentMode = .scaleToFill
         view.addSubview(backgroundImageView)
 
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = false
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+
         configureImageButton(backButton, imageName: "back_button", accessibilityLabel: "Back")
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         view.addSubview(backButton)
@@ -94,16 +101,16 @@ final class SettingsViewController: UIViewController {
             configureImageButton(button, imageName: item.imageName, accessibilityLabel: item.accessibilityLabel)
             button.tag = item.rawValue
             button.addTarget(self, action: #selector(settingItemTapped(_:)), for: .touchUpInside)
-            view.addSubview(button)
+            contentView.addSubview(button)
         }
 
         configureImageButton(logoutButton, imageName: "settings_logout_button", accessibilityLabel: "Log out")
         logoutButton.addTarget(self, action: #selector(logoutTapped), for: .touchUpInside)
-        view.addSubview(logoutButton)
+        contentView.addSubview(logoutButton)
     }
 
     private func setupConstraints() {
-        let views: [UIView] = [backgroundImageView, backButton, logoutButton] + itemButtons.map { $0 as UIView }
+        let views: [UIView] = [backgroundImageView, scrollView, contentView, backButton, logoutButton] + itemButtons.map { $0 as UIView }
         views.forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         NSLayoutConstraint.activate([
@@ -111,6 +118,17 @@ final class SettingsViewController: UIViewController {
             backgroundImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             backgroundImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
 
             backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 6),
             backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 21),
@@ -120,11 +138,11 @@ final class SettingsViewController: UIViewController {
 
         var previousButton: UIButton?
         for button in itemButtons {
-            let widthConstraint = button.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -(Layout.rowHorizontalInset * 2))
+            let widthConstraint = button.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -(Layout.rowHorizontalInset * 2))
             widthConstraint.priority = .defaultHigh
 
             NSLayoutConstraint.activate([
-                button.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                button.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
                 widthConstraint,
                 button.widthAnchor.constraint(lessThanOrEqualToConstant: Layout.rowMaximumWidth),
                 button.heightAnchor.constraint(equalTo: button.widthAnchor, multiplier: Layout.rowAspectRatio)
@@ -133,30 +151,25 @@ final class SettingsViewController: UIViewController {
             if let previousButton {
                 button.topAnchor.constraint(equalTo: previousButton.bottomAnchor, constant: Layout.rowSpacing).isActive = true
             } else {
-                button.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: Layout.rowTopOffset).isActive = true
+                button.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Layout.rowTopOffset).isActive = true
             }
 
             previousButton = button
         }
 
-        let logoutWidthConstraint = logoutButton.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -(Layout.rowHorizontalInset * 2))
+        let logoutWidthConstraint = logoutButton.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -(Layout.rowHorizontalInset * 2))
         logoutWidthConstraint.priority = .defaultHigh
-        let logoutBottomConstraint = logoutButton.bottomAnchor.constraint(
-            equalTo: view.safeAreaLayoutGuide.bottomAnchor,
-            constant: Layout.logoutBottomOffset
-        )
-        logoutBottomConstraint.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
-            logoutButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            logoutButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             logoutWidthConstraint,
             logoutButton.widthAnchor.constraint(lessThanOrEqualToConstant: Layout.rowMaximumWidth),
             logoutButton.heightAnchor.constraint(equalTo: logoutButton.widthAnchor, multiplier: Layout.rowAspectRatio),
-            logoutBottomConstraint
+            logoutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: Layout.logoutBottomOffset)
         ])
 
         if let lastButton = itemButtons.last {
-            logoutButton.topAnchor.constraint(greaterThanOrEqualTo: lastButton.bottomAnchor, constant: 42).isActive = true
+            logoutButton.topAnchor.constraint(equalTo: lastButton.bottomAnchor, constant: 42).isActive = true
         }
     }
 

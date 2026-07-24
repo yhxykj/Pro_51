@@ -164,7 +164,7 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
             backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             backgroundImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -174,14 +174,13 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
             contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-            contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor),
 
             backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 6),
             backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 21),
             backButton.widthAnchor.constraint(equalToConstant: 69),
             backButton.heightAnchor.constraint(equalToConstant: 44),
 
-            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: Layout.headerTopOffset),
+            headerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Layout.headerTopOffset),
             headerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Layout.horizontalInset),
             headerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Layout.horizontalInset),
             headerView.heightAnchor.constraint(equalToConstant: 168),
@@ -193,7 +192,6 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
 
             titleImageView.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 0),
             titleImageView.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 169),
-//            titleImageView.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -49),
             titleImageView.heightAnchor.constraint(equalToConstant: 40),
 
             balanceLabel.topAnchor.constraint(equalTo: titleImageView.bottomAnchor, constant: 7),
@@ -218,7 +216,7 @@ final class RechargeViewController: UIViewController, UICollectionViewDataSource
                 equalTo: packagesCollectionView.widthAnchor,
                 multiplier: Layout.packageAspectRatio
             ),
-            packagesCollectionView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -34)
+            packagesCollectionView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -34)
         ])
     }
 
